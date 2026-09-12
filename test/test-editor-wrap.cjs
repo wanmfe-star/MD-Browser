@@ -1,0 +1,24 @@
+'use strict';
+const {app,BrowserWindow,ipcMain}=require('electron');
+const path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+app.setPath('userData',path.join(os.tmpdir(),'editor-wrap-'+process.pid));
+ipcMain.handle('app:load-connection',()=>({ok:true,data:null}));
+const timeout=setTimeout(()=>app.exit(1),25000);
+app.whenReady().then(async()=>{
+ const win=new BrowserWindow({show:false,width:1360,height:860,webPreferences:{preload:path.join(__dirname,'../electron/preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:false}});win.webContents.setBackgroundThrottling(false);
+ await win.loadFile(path.join(__dirname,'../renderer/index.html'));const js=code=>win.webContents.executeJavaScript(code,true);
+ const text='一段很长的中文文字，应该自动换行而不改变原文件。'.repeat(35)+'\n\n'+'https://example.com/'+'a'.repeat(500)+'\n\t缩进文字\n最后一行';
+ await js('state.currentFile={name:"a.md",path:"/a.md"};state.viewMode="edit";applyViewMode();editorEl.value='+JSON.stringify(text)+';state.savedContent=editorEl.value;updateMetrics()');
+ const frame=()=>js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await frame();
+ assert.equal(await js('editorEl.wrap'),'soft');assert.equal(await js('editorEl.scrollWidth<=editorEl.clientWidth'),true);
+ const initial=await js('$("lineNumbers").firstChild.getBoundingClientRect().height');assert.ok(initial>27);
+ assert.equal(await js('$("lineNumbers").children.length'),text.split('\n').length);
+ await js('workspace.enable("left")');await frame();
+ assert.ok(await js('$("lineNumbers").firstChild.getBoundingClientRect().height')>initial,'narrow pane adds visual lines');
+ await js('setEditorFontSize(22)');await frame();
+ assert.equal(await js('editorEl.value'),text);assert.equal(await js('isDirty()'),false);
+ const delta=await js('(()=>{const g=$("lineNumbers"),s=getComputedStyle(editorEl),height=[...g.children].reduce((n,c)=>n+c.getBoundingClientRect().height,0)+parseFloat(s.paddingTop)+parseFloat(s.paddingBottom);return Math.abs(height-editorEl.scrollHeight);})()');assert.ok(delta<=2,'line number height tracks native textarea scroll height: '+delta);
+ await js('editorEl.scrollTop=250;editorEl.dispatchEvent(new Event("scroll"))');assert.ok(Math.abs(await js('$("lineNumbers").scrollTop-editorEl.scrollTop'))<=1);
+ console.log('Markdown wrap passed: default soft wrapping, long Chinese/URL lines, blank lines, narrow dual pane, zoomed line numbers, scrolling and unchanged document bytes');
+ clearTimeout(timeout);app.exit(0);
+}).catch(e=>{console.error(e);clearTimeout(timeout);app.exit(1);});

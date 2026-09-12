@@ -24,13 +24,23 @@ async function connect({ url, username, password }) {
     password: password || '',
     authType: AuthType.Password,
   });
-  const root = await candidate.getDirectoryContents('/', { deep: false });
+  const root = await candidate.getDirectoryContents('/', { deep: false, details: true });
   client = candidate;
-  return root.map(normalizeItem);
+  return root.data.filter(isVisible).map(normalizeItem);
 }
 
 function disconnect() {
   client = null;
+}
+
+function isVisible(item) {
+  if (item.basename.startsWith('.')) return false;
+  for (const [name,raw] of Object.entries(item.props || {})) {
+    const key=name.split(':').pop().toLowerCase(),value=raw && typeof raw==='object' ? raw['#text'] : raw;
+    if (['ishidden','hidden'].includes(key) && ['1','true'].includes(String(value).toLowerCase())) return false;
+    if (key==='win32fileattributes' && typeof value==='string' && /^[a-f0-9]+$/i.test(value) && (parseInt(value,16)&2)) return false;
+  }
+  return true;
 }
 
 function normalizeItem(it) {
@@ -45,8 +55,8 @@ function normalizeItem(it) {
 }
 
 async function list(dir) {
-  const items = await getClient().getDirectoryContents(dir, { deep: false });
-  return items.map(normalizeItem);
+  const items = await getClient().getDirectoryContents(dir, { deep: false, details: true });
+  return items.data.filter(isVisible).map(normalizeItem);
 }
 
 async function read(path) {
@@ -55,16 +65,30 @@ async function read(path) {
 }
 
 async function write(path, content) {
-  if (/\.pdf$/i.test(path)) throw new Error('PDF 不支持文本写入，请使用原文件导入');
+  if (require('../shared/media-types').type(path)) throw new Error('媒体文件不能写入纯文本');
+  if (/\.(pdf|docx)$/i.test(path)) throw new Error('PDF 和 Word 必须以原格式保存，不能写入纯文本');
   await getClient().putFileContents(path, content, { overwrite: true });
   return true;
 }
 
 async function create(path, content) {
-  if (/\.pdf$/i.test(path) && typeof content === 'string') throw new Error('PDF 必须以原始二进制文件导入');
+  if (/\.(pdf|docx)$/i.test(path) && typeof content === 'string') throw new Error('PDF 必须以原始二进制文件导入');
   const created = await getClient().putFileContents(path, content, { overwrite: false });
   if (!created) throw new Error('同名文件已存在，请使用其他名称');
   return true;
+}
+
+async function createMedia(path, stream, size) {
+  const ok = await getClient().putFileContents(path, stream, { overwrite: false, headers: { 'Content-Length': String(size) } });
+  if (!ok) throw new Error('同名文件已存在，请使用其他名称');
+  return true;
+}
+
+function mediaReader(path) {
+  const selectedClient = getClient();
+  return ({ method = 'GET', range, signal }) => selectedClient.customRequest(path, {
+    method, signal, headers: { 'Accept-Encoding': 'identity', ...(range ? { Range: range } : {}) },
+  });
 }
 
 async function readBinary(path) {
@@ -80,6 +104,18 @@ async function writePDF(path, bytes, expected) {
   const etag=current.headers?.etag;
   const ok=await currentClient.putFileContents(path,Buffer.from(bytes),{overwrite:true,headers:etag ? {'If-Match':etag} : {}});
   if(!ok)throw new Error('PDF 保存失败，请重试');
+  return true;
+}
+
+async function writeDocx(path, bytes, expected) {
+  if (!/\.docx$/i.test(path)) throw new Error('只能保存 DOCX 文件');
+  const currentClient = getClient();
+  const current = await currentClient.getFileContents(path, { format: 'binary', details: true });
+  if (!Buffer.from(current.data).equals(Buffer.from(expected))) throw new Error('远程 Word 已被修改，请重新打开后核对；当前修改仍保留');
+  const etag = current.headers?.etag;
+  if (!etag) throw new Error('服务器未提供版本标识，无法安全覆盖 Word 文件；当前修改仍保留');
+  const ok = await currentClient.putFileContents(path, Buffer.from(bytes), { overwrite: true, headers: { 'If-Match': etag } });
+  if (!ok) throw new Error('Word 保存失败，请重试');
   return true;
 }
 
@@ -103,8 +139,16 @@ async function rename(from, to) {
   return true;
 }
 
+async function copy(from, to) {
+  if (from === to) throw new Error('副本名称不能与原文件相同');
+  const client = getClient();
+  if (await client.exists(to)) throw new Error('同名文件已存在，请使用其他名称');
+  await client.copyFile(from, to, { overwrite: false });
+  return true;
+}
+
 async function exists(path) {
   return getClient().exists(path);
 }
 
-module.exports = { connect, disconnect, list, read, readBinary, writePDF, write, create, mkdir, remove, rename, exists };
+module.exports = { connect, disconnect, list, read, readBinary, mediaReader, createMedia, writePDF, writeDocx, write, create, mkdir, remove, rename, copy, exists };

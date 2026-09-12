@@ -19,11 +19,16 @@ await fsp.writeFile(path.join(root, 'README.md'), '# Hello\n\n这是 **测试** 
 await fsp.mkdir(path.join(root, 'notes'));
 await fsp.writeFile(path.join(root, 'notes', 'todo.md'), '## TODO\n\n- [ ] 事项一\n- [x] 事项二\n');
 
-const { port, close } = await startWebDAVServer(root);
+for(const name of ['.DS_Store','._README.md','server-hidden.pdf'])await fsp.writeFile(path.join(root,name),'hidden');
+await fsp.mkdir(path.join(root,'.hidden-folder'));
+await fsp.writeFile(path.join(root,'notes','._todo.md'),'apple metadata');
+const { port, close } = await startWebDAVServer(root,{hiddenNames:['server-hidden.pdf']});
 const base = `http://127.0.0.1:${port}/`;
 
 try {
-  await webdav.connect({ url: base, username: 'u', password: 'p' });
+  const connected = await webdav.connect({ url: base, username: 'u', password: 'p' });
+  check('首次连接过滤隐藏文件、目录及服务端隐藏标记',connected.length===2);
+  check('过滤不会删除远程文件',await fsp.readFile(path.join(root,'._README.md'),'utf8')==='hidden');
 
   const rootList = await webdav.list('/');
   check('list 根目录返回 2 项', rootList.length === 2, JSON.stringify(rootList.map((i) => i.name)));
@@ -76,6 +81,11 @@ try {
   const pdfBytes = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.from([0, 128, 255, 10])]);
   await webdav.create('/binary.pdf', pdfBytes);
   check('PDF 二进制上传回读完全一致', (await webdav.readBinary('/binary.pdf')).equals(pdfBytes));
+  await webdav.copy('/binary.pdf', '/副本.pdf');
+  check('复制保留二进制内容及原文件', (await webdav.readBinary('/副本.pdf')).equals(pdfBytes) && (await webdav.readBinary('/binary.pdf')).equals(pdfBytes));
+  let copyRejected = false;
+  try { await webdav.copy('/created.md', '/副本.pdf'); } catch { copyRejected = true; }
+  check('复制不覆盖同名目标', copyRejected && (await webdav.readBinary('/副本.pdf')).equals(pdfBytes));
   let textWriteRejected = false;
   try { await webdav.write('/binary.pdf', 'text'); } catch { textWriteRejected = true; }
   check('拒绝以文本覆盖 PDF', textWriteRejected && (await webdav.readBinary('/binary.pdf')).equals(pdfBytes));

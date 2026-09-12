@@ -5,3 +5,13 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Local connection credentials and user data
+.env
+.env.*
+connection.enc
+connection.enc.tmp
+user-data/
+userData/
+Local Storage/
+Session Storage/

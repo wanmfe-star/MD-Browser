@@ -38,6 +38,7 @@ const context = vm.createContext({
   window: { mdAPI: api, addEventListener: (name, fn) => { windowEvents[name] = fn; }, close: () => { closed = true; } },
   marked: { parse: text => text }, setTimeout, clearTimeout,
 });
+vm.runInContext(fs.readFileSync(new URL('../renderer/view-zoom.js', import.meta.url), 'utf8'), context);
 vm.runInContext(fs.readFileSync(new URL('../renderer/app.js', import.meta.url), 'utf8'), context);
 const run = code => vm.runInContext(code, context);
 

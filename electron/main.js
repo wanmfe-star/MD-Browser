@@ -1,10 +1,12 @@
 // Electron 主进程
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell, dialog, Menu, safeStorage, webFrameMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu, safeStorage, webFrameMain, protocol } = require('electron');
 const path = require('path');
 const os = require('os');
 const webdav = require('./webdav');
+const media = require('./media').createMediaService(webdav);
+require('./media-protocol');
 
 // Customize only Chromium's PDF toolbar; the underlying PDF stays untouched.
 app.on('web-contents-created', (_event, contents) => {
@@ -122,6 +124,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  protocol.handle('mdmedia', request => media.handle(request));
   if (process.platform === 'darwin') app.dock.setIcon(path.join(__dirname, '../assets/icon.png'));
   createWindow();
 
@@ -148,6 +151,7 @@ function handle(channel, fn) {
 
 handle('webdav:connect', async (cfg) => {
   const root = await webdav.connect(cfg);
+  media.clear();
   let credentialWarning = null;
   try { await credentials.save(cfg); }
   catch (error) { credentialWarning = '连接成功，但密码未保存：' + error.message; }
@@ -158,12 +162,45 @@ handle('app:load-connection', () => credentials.load());
 handle('app:clear-connection', () => credentials.clear());
 
 handle('webdav:disconnect', () => {
+  media.clear();
   webdav.disconnect();
   return true;
 });
 
+handle('media:upload', async (target, source) => {
+  const type = require('../shared/media-types').type;
+  if (typeof source !== 'string' || !path.isAbsolute(source) || !type(target) || !type(source) || path.extname(target).toLowerCase() !== path.extname(source).toLowerCase()) throw new Error('无效的媒体文件');
+  const file = await require('node:fs/promises').open(source, 'r');
+  let stream;
+  try {
+    const info = await file.stat();
+    if (!info.isFile() || info.size > 2 * 1024 * 1024 * 1024) throw new Error('请选择不超过 2 GB 的媒体文件');
+    stream = file.createReadStream({ autoClose: false });
+    return await webdav.createMedia(target, stream, info.size);
+  } finally { stream?.destroy(); await file.close(); }
+});
+handle('app:open-system-file', require('./system-open').createSystemOpener(webdav, shell, path.join(app.getPath('temp'), 'md-browser-open')));
+handle('media:open', target => media.open(target));
+handle('media:release', url => { media.release(url); return true; });
+app.on('before-quit', () => media.clear());
 handle('webdav:list', (dir) => webdav.list(dir));
 handle('webdav:read', (p) => webdav.read(p));
+handle('word:read', async target => {
+  if (!/\.docx$/i.test(target)) throw new Error('请选择 DOCX 文件');
+  const bytes = await webdav.readBinary(target);
+  return { bytes: new Uint8Array(bytes), model: await require('./docx').inspectDocx(bytes) };
+});
+handle('word:create', async (target, bytes) => {
+  if (!/\.docx$/i.test(target)) throw new Error('Word 导入必须保留 .docx 扩展名');
+  const buffer = Buffer.from(bytes); await require('./docx').inspectDocx(buffer);
+  return webdav.create(target, buffer);
+});
+handle('word:save', async ({ path: target, bytes, blocks }) => {
+  const saved = await require('./docx').editDocx(Buffer.from(bytes), blocks);
+  const model = await require('./docx').inspectDocx(saved);
+  await webdav.writeDocx(target, saved, bytes);
+  return { bytes: new Uint8Array(saved), model };
+});
 handle('webdav:read-pdf', async (p) => {
   const bytes = await webdav.readBinary(p);
   require('./pdf-file').validatePDF(bytes);
@@ -185,6 +222,17 @@ handle('app:export-pdf', async (payload) => {
   const destination = /\.pdf$/i.test(result.filePath) ? result.filePath : result.filePath + '.pdf';
   return require('./export-pdf').exportPDF({ html: payload.html, title }, destination);
 });
+handle('app:select-import-documents', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '导入文档（可多选）', properties: ['openFile', 'multiSelections'],
+    filters: [{ name: '文档 / 音乐 / 视频 / 图片', extensions: ['md', 'markdown', 'pdf', 'docx', 'doc', 'txt', 'text', ...require('../shared/media-types').extensions] }],
+  });
+  return result.canceled ? [] : result.filePaths.map(filePath => ({ path: filePath, name: path.basename(filePath) }));
+});
+handle('app:convert-import-document', filePath => {
+  if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) throw new Error('无法读取本地文件，请重新选择或拖入');
+  return require('./import-document').convertDocument(filePath, { preserveDocx: true });
+});
 handle('app:import-document', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '导入 PDF、Word 或文本文件', properties: ['openFile'],
@@ -197,13 +245,16 @@ handle('webdav:write', (p, content) => webdav.write(p, content));
 handle('webdav:create', (p, content) => webdav.create(p, content));
 handle('webdav:mkdir', (p) => webdav.mkdir(p));
 handle('webdav:delete', (p) => webdav.remove(p));
+handle('webdav:copy', (from, to) => webdav.copy(from, to));
 handle('webdav:rename', (from, to) => webdav.rename(from, to));
 
 handle('app:file-menu', (folder) => new Promise(resolve => {
   const menu = Menu.buildFromTemplate([
     { label: folder ? '打开文件夹' : '打开文件', click: () => resolve('open') },
+    ...(!folder ? [{label:'在左栏打开',click:()=>resolve('open-left')},{label:'在右栏打开',click:()=>resolve('open-right')}] : []),
     { type: 'separator' },
     { label: '重命名…', click: () => resolve('rename') },
+    ...(!folder ? [{ label: '复制…', click: () => resolve('copy') }] : []),
     { label: '移动到…', click: () => resolve('move') },
     { type: 'separator' },
     { label: folder ? '删除文件夹…' : '删除文件…', click: () => resolve('delete') },

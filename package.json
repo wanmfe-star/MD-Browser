@@ -1,24 +1,39 @@
 {
   "name": "md-browser",
   "version": "0.1.0",
-  "description": "桌面 Markdown 浏览/编辑应用，连接 WebDAV 远程存储（坚果云等）",
+  "description": "连接 WebDAV 的文档编辑与多媒体浏览客户端",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
     "test:webdav": "node test/test-webdav.mjs",
     "test:renderer": "node test/test-renderer.mjs",
-    "test": "npm run test:webdav && npm run test:renderer && npm run test:format && npm run test:credentials && npm run test:import",
+    "test": "npm run test:webdav && npm run test:renderer && npm run test:format && npm run test:credentials && npm run test:import && npm run test:word && npm run test:media",
     "test:format": "node test/test-format.cjs",
     "test:credentials": "node test/test-credentials.cjs",
     "test:import": "node test/test-import.cjs",
+    "test:batch-import": "electron test/test-batch-import.cjs",
     "test:pdf": "electron test/test-pdf.cjs",
-    "test:pdf-annotations": "node test/test-pdf-annotations.cjs"
+    "test:pdf-zoom": "electron test/test-pdf-zoom.cjs",
+    "test:pdf-annotations": "node test/test-pdf-annotations.cjs",
+    "test:word": "node test/test-docx.cjs",
+    "test:word-ui": "electron test/test-word-ui.cjs",
+    "test:media": "node test/test-media.cjs",
+    "test:media-ui": "electron test/test-media-ui.cjs",
+    "test:system-open": "electron test/test-system-open.cjs",
+    "test:pdf-scroll": "electron test/test-pdf-scroll.cjs",
+    "test:view-zoom": "electron test/test-view-zoom.cjs",
+    "test:word-text": "electron test/test-word-text.cjs",
+    "test:workspace": "electron test/test-workspace.cjs",
+    "test:editor-wrap": "electron test/test-editor-wrap.cjs",
+    "dist:win": "node scripts/build-win.cjs"
   },
   "license": "MIT",
   "dependencies": {
+    "@xmldom/xmldom": "^0.9.12",
     "dompurify": "^3.2.3",
     "iconv-lite": "^0.7.3",
+    "jszip": "^3.10.2",
     "mammoth": "^1.12.2",
     "marked": "^12.0.2",
     "pdf-lib": "^1.17.1",
@@ -28,6 +43,46 @@
     "webdav": "^5.7.1"
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^26.8.1"
+  },
+  "author": "wanmfe-star",
+  "build": {
+    "appId": "io.github.wanmfestar.mdbrowser",
+    "productName": "MD Browser",
+    "directories": {
+      "output": "dist",
+      "app": ".electron-cache/release-app"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "shared/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MD Browser",
+      "artifactName": "MD-Browser-0.1.0-x64-Setup.exe"
+    },
+    "portable": {
+      "artifactName": "MD-Browser-0.1.0-x64-Portable.exe"
+    },
+    "electronVersion": "33.4.11"
   }
 }

@@ -29,6 +29,8 @@ const state = {
 };
 
 function isDirty() {
+  if (state.currentFile?.kind === 'external' || window.mediaTypes?.isKind(state.currentFile?.kind)) return false;
+  if (state.currentFile?.kind === 'docx') return !!window.wordEditor?.dirty();
   return !!state.currentFile && state.currentFile.kind !== 'pdf' && editorEl.value !== state.savedContent;
 }
 
@@ -51,12 +53,16 @@ function syncControls(action) {
   discBtn.disabled = state.busy || !state.connected;
   [connUrl, connUser, connPass].forEach(el => { el.disabled = state.busy || state.connected; });
   [newFileBtn, newDirBtn, refreshBtn].forEach(el => { el.disabled = state.busy || !state.connected; });
+  const emptyCreate = $('emptyCreateMarkdown');
+  if (emptyCreate) emptyCreate.disabled = state.busy || !state.connected;
+  $('openSystemFile').disabled = state.busy || !state.connected || state.currentFile?.kind !== 'external';
   $('importFile').disabled = state.busy || !state.connected;
-  $('exportPdf').disabled = state.busy || !state.currentFile || state.currentFile.kind === 'pdf';
+  $('exportPdf').disabled = state.busy || !state.currentFile || ['pdf','docx','audio','video','image','external'].includes(state.currentFile.kind);
   [renameBtn, deleteBtn].forEach(el => { el.disabled = state.busy || !state.connected || !state.currentFile; });
-  editorEl.readOnly = !state.currentFile || state.currentFile.kind === 'pdf' || (state.busy && action !== save);
-  viewSeg.querySelectorAll('button').forEach(button => { button.disabled = state.currentFile?.kind === 'pdf'; });
+  editorEl.readOnly = !state.currentFile || ['pdf','docx','audio','video','image','external'].includes(state.currentFile.kind) || (state.busy && action !== save);
+  viewSeg.querySelectorAll('button').forEach(button => { button.disabled = ['pdf','docx','audio','video','image','external'].includes(state.currentFile?.kind); });
   $('formatToolbar').querySelectorAll('button, select, input').forEach(button => { button.disabled = editorEl.readOnly; });
+  window.wordEditor?.setLocked(state.busy || state.currentFile?.kind !== 'docx');
 }
 
 async function runAction(action) {
@@ -97,12 +103,14 @@ function fmtSize(n) {
 }
 function setStatus(msg, kind) {
   statusEl.textContent = msg;
+  window.workspace?.showStatus(msg);
   statusEl.className = 'status' + (kind ? ' ' + kind : '');
   if ($('connectionDialog').open) $('connectionMessage').textContent = kind === 'error' ? msg : '';
 }
 
 // ---------- 连接 ----------
 async function doConnect() {
+  if(window.workspace&&!await window.workspace.canChangeConnection())return;
   credentialRevision++;
   if (!(await canDiscard())) return;
   const cfg = {
@@ -121,7 +129,6 @@ async function doConnect() {
     state.connected = true;
     state.connectionKey = JSON.stringify([new URL(cfg.url).href.replace(/\/+$/, ''), cfg.username]);
     try { localStorage.setItem('md-browser.connection', JSON.stringify({ url: cfg.url, username: cfg.username })); } catch {}
-    $('connectionName').textContent = /jianguoyun/.test(cfg.url) ? '坚果云' : new URL(cfg.url).hostname;
     $('connectionDialog').close();
     state.currentDir = '/';
     state.currentFile = null;
@@ -132,6 +139,7 @@ async function doConnect() {
     setStatus(res.data.credentialWarning || '已连接，密码已加密保存', res.data.credentialWarning ? 'error' : 'ok');
     setConnUI(true);
     state.entries = res.data.root;
+    window.workspace?.connectionChanged();
     renderCrumb();
     renderList();
   } else {
@@ -140,6 +148,7 @@ async function doConnect() {
 }
 
 async function doDisconnect() {
+  if(window.workspace&&!await window.workspace.canChangeConnection())return;
   if (!(await canDiscard())) return;
   const res = await window.mdAPI.disconnect();
   if (!res.ok) { setStatus('断开失败：' + res.error, 'error'); return; }
@@ -155,10 +164,10 @@ async function doDisconnect() {
   renderList();
   setStatus('未连接');
   setConnUI(false);
+  window.workspace?.connectionChanged();
 }
 
 function setConnUI(connected) {
-  $('connectionState').textContent = connected ? '已连接' : '未连接 · 点击设置';
   $('sidebarStatus').textContent = connected ? 'WebDAV 已连接' : '尚未连接 WebDAV';
   $('connectionDot').classList.toggle('online', connected);
   connBtn.disabled = connected;
@@ -178,6 +187,8 @@ async function refreshDir() {
     return;
   }
   state.entries = res.data;
+  window.workspace?.sync();
+  if(window.isPaneChild)await window.paneHost.refreshSidebar();
   renderCrumb();
   renderList();
 }
@@ -189,6 +200,7 @@ function navigate(dir) {
     const res = await window.mdAPI.list(dir);
     if (!res.ok) { state.currentDir = previous; setStatus('读取目录失败：' + res.error, 'error'); return; }
     state.entries = res.data;
+    window.workspace?.sync();
     renderCrumb(); renderList();
   });
 }
@@ -226,8 +238,8 @@ function renderList() {
   sorted.forEach(item => {
     const folder = item.type === 'directory';
     const li = document.createElement('li'); const button = document.createElement('button');
-    button.className = 'file-row' + (state.currentFile?.path === item.path ? ' active' : '');
-    button.innerHTML = fileIcon(folder) + '<span class="name">' + escapeHtml(item.name) + '</span>' + (folder ? '<span class="meta">›</span>' : /\.pdf$/i.test(item.name) ? '<span class="file-pdf-badge">PDF</span>' : '');
+    button.className = 'file-row' + ((window.workspace?.activeFile() || state.currentFile)?.path === item.path ? ' active' : '');
+    button.innerHTML = fileIcon(folder) + '<span class="name">' + escapeHtml(item.name) + '</span>' + (folder ? '<span class="meta">›</span>' : /\.pdf$/i.test(item.name) ? '<span class="file-pdf-badge">PDF</span>' : window.mediaTypes?.type(item.name) ? '<span class="file-pdf-badge">' + ({audio:'音乐',video:'视频',image:'图片'})[window.mediaTypes.type(item.name).kind] + '</span>' : '');
     button.title = item.name;
     button.addEventListener('contextmenu', e => { e.preventDefault(); runAction(() => showFileMenu(item)); });
     button.addEventListener('click', () => folder ? navigate(item.path) : runAction(() => openFile(item)));
@@ -237,9 +249,13 @@ function renderList() {
 }
 
 // ---------- 打开 / 编辑 / 保存 ----------
-async function openFile(item, discardApproved = false) {
+async function openFile(item, discardApproved = false, local = false) {
+  if (!local && window.workspace) return window.workspace.open(item,undefined,true,discardApproved);
   if (!discardApproved && !(await canDiscard())) return;
+  if (window.mediaTypes?.type(item.name)) return openMedia(item);
   if (/\.pdf$/i.test(item.name)) return openPDF(item);
+  if (/\.docx$/i.test(item.name)) return openWord(item);
+  if (!isMarkdown(item.name) && !/\.(txt|text)$/i.test(item.name)) return openUnsupported(item);
   const res = await window.mdAPI.read(item.path);
   if (!res.ok) {
     setStatus('读取文件失败：' + res.error, 'error');
@@ -256,6 +272,7 @@ async function openFile(item, discardApproved = false) {
   clearTimeout(autoSaveTimer);
   state.saveError = false;
   releasePDF();
+  if(!state.currentFile&&(window.isPaneChild||window.workspace?.inspect().split))state.viewMode='edit';
   state.currentFile = { path: item.path, name: item.name };
   applyViewMode();
   state.savedContent = res.data;
@@ -269,7 +286,31 @@ async function openFile(item, discardApproved = false) {
   if (isDirty()) { persistDraft(); scheduleSave(); }
 }
 
+function openUnsupported(item) {
+  releasePDF(); clearTimeout(autoSaveTimer); clearTimeout(previewTimer);
+  state.currentFile = { ...item, kind: 'external' }; state.savedContent = ''; state.saveError = false; editorEl.value = '';
+  docNameEl.textContent = item.name; $('systemOpenMessage').textContent = '';
+  applyViewMode(); updateDirty(); renderList();
+  $('wordCount').textContent = fmtSize(item.size); $('cursorPosition').textContent = '系统程序打开';
+  setStatus('已选择：' + item.name);
+}
+$('openSystemFile').addEventListener('click', () => runAction(async () => {
+  if (state.currentFile?.kind !== 'external') return;
+  $('systemOpenMessage').textContent = '正在下载并打开，请稍候…';
+  try {
+    const result = await window.mdAPI.openSystemFile(state.currentFile.path);
+    if (!result.ok) throw Error(result.error);
+    $('systemOpenMessage').textContent = '已交给系统默认程序打开';
+    setStatus('已调用系统默认程序');
+  } catch (error) {
+    $('systemOpenMessage').textContent = error.message;
+    setStatus('打开失败：' + error.message, 'error');
+  }
+}));
+
 function releasePDF() {
+  window.mediaViewer?.clear();
+  window.wordEditor?.clear();
   window.pdfAnnotations?.clear();
   if (state.pdfUrl) {
     $('pdfViewer').src = 'about:blank';
@@ -277,6 +318,36 @@ function releasePDF() {
     state.pdfUrl = null;
   }
 }
+async function openMedia(item, existingQueue) {
+  const type = window.mediaTypes.type(item.name);
+  if (!type) return;
+  const result = await window.mdAPI.openMedia(item.path);
+  if (!result.ok) { setStatus('媒体加载失败：' + result.error, 'error'); return; }
+  const queue = existingQueue || state.entries.filter(entry => entry.type !== 'directory' && window.mediaTypes.type(entry.name)?.kind === type.kind).sort((a,b) => a.name.localeCompare(b.name,'zh-CN'));
+  if (!queue.some(entry => entry.path === item.path)) queue.push(item);
+  releasePDF(); clearTimeout(autoSaveTimer); clearTimeout(previewTimer);
+  state.currentFile = { ...item, kind: type.kind }; state.savedContent = ''; state.saveError = false; editorEl.value = '';
+  docNameEl.textContent = item.name; applyViewMode(); renderList(); updateDirty();
+  window.mediaViewer.load(state.currentFile, result.data, queue);
+  $('wordCount').textContent = fmtSize(item.size);
+  $('cursorPosition').textContent = { audio:'音乐播放', video:'视频播放', image:'图片查看' }[type.kind];
+  setStatus('已打开：' + item.name);
+}
+
+async function openWord(item) {
+  setStatus('正在加载 Word…');
+  const result = await window.mdAPI.readWord(item.path);
+  if (!result.ok) { setStatus('Word 加载失败：' + result.error, 'error'); return; }
+  releasePDF(); clearTimeout(autoSaveTimer); clearTimeout(previewTimer);
+  state.currentFile = { path: item.path, name: item.name, kind: 'docx' };
+  state.savedContent = ''; state.saveError = false; editorEl.value = '';
+  docNameEl.textContent = item.name;
+  window.wordEditor.load(result.data);
+  applyViewMode(); updateDirty(); renderList();
+  $('cursorPosition').textContent = 'Word · 单页编辑';
+  setStatus('已打开 Word：' + item.name, 'ok');
+}
+
 async function openPDF(item) {
   setStatus('正在加载 PDF…');
   const res = await window.mdAPI.readPDF(item.path);
@@ -300,7 +371,7 @@ async function openPDF(item) {
 }
 
 function renderPreview() {
-  if (state.currentFile?.kind === 'pdf') return;
+  if (['pdf','docx','audio','video','image','external'].includes(state.currentFile?.kind)) return;
   const text = editorEl.value;
   if (!text.trim()) {
     previewEl.innerHTML = '<div class="placeholder">（空文档）</div>';
@@ -332,6 +403,8 @@ function removeDraft(path) {
   try { localStorage.removeItem(draftKey(path)); } catch {}
 }
 function persistDraft() {
+  if (state.currentFile?.kind === 'external' || window.mediaTypes?.isKind(state.currentFile?.kind)) return true;
+  if (state.currentFile?.kind === 'docx') return false;
   if (!state.currentFile || state.currentFile.kind === 'pdf') return true;
   try {
     if (isDirty()) localStorage.setItem(draftKey(), JSON.stringify({ content: editorEl.value, base: state.savedContent, updatedAt: Date.now() }));
@@ -345,15 +418,18 @@ function persistDraft() {
   }
 }
 function scheduleSave() {
+  if (state.currentFile?.kind === 'docx') return;
   clearTimeout(autoSaveTimer);
   if (state.connected && isDirty()) autoSaveTimer = setTimeout(() => runAction(save), 2000);
 }
 function updateDirty() {
   dirtyEl.disabled = !state.saveError;
   dirtyEl.className = 'save-status' + (state.saveError ? ' error' : isDirty() ? ' pending' : '');
-  dirtyEl.textContent = !state.currentFile ? '' : state.currentFile.kind === 'pdf' ? 'PDF 原文件' : state.saving ? '保存中…' : state.saveError ? '保存失败 · 点击重试' : isDirty() ? '待保存' : '✓ 已保存';
+  dirtyEl.textContent = !state.currentFile ? '' : (state.currentFile.kind === 'external' || window.mediaTypes?.isKind(state.currentFile.kind)) ? '' : state.currentFile.kind === 'pdf' ? 'PDF 原文件' : state.saving ? '保存中…' : state.saveError ? '保存失败 · 点击重试' : isDirty() ? '待保存' : '✓ 已保存';
 }
 async function save() {
+  if (state.currentFile?.kind === 'external' || window.mediaTypes?.isKind(state.currentFile?.kind)) return;
+  if (state.currentFile?.kind === 'docx') return window.wordEditor?.save();
   if (state.currentFile?.kind === 'pdf') return window.pdfAnnotations?.save();
   clearTimeout(autoSaveTimer);
   if (!state.currentFile || !state.connected || !isDirty()) return;
@@ -377,8 +453,10 @@ async function save() {
   }
 }
 function updateMetrics() {
+  if (state.currentFile?.kind === 'docx') return;
   const text = editorEl.value;
-  $('lineNumbers').textContent = Array.from({ length: text.split('\n').length }, (_,i) => i + 1).join('\n');
+  if(window.markdownWrap)window.markdownWrap.update();
+  else $('lineNumbers').textContent = Array.from({ length: text.split('\n').length }, (_,i) => i + 1).join('\n');
   $('lineNumbers').scrollTop = editorEl.scrollTop;
   $('wordCount').textContent = text.replace(/\s/g, '').length + ' 字';
   const before = text.slice(0, editorEl.selectionStart || 0).split('\n');
@@ -406,37 +484,38 @@ function updateEditorUI(hasFile) {
 let previewFontSize = 14;
 try {
   const savedSize = Number(localStorage.getItem('md-browser.previewFontSize'));
-  if (Number.isInteger(savedSize) && savedSize >= 12 && savedSize <= 28) previewFontSize = savedSize;
+  if (Number.isFinite(savedSize) && savedSize >= 4 && savedSize <= 72) previewFontSize = savedSize;
 } catch {}
 
 function setPreviewFontSize(size, remember = true) {
-  previewFontSize = Math.max(12, Math.min(28, size));
+  previewFontSize = window.viewZoom.clamp(size, 4, 72);
   previewEl.style.fontSize = previewFontSize + 'px';
-  $('previewFontReset').textContent = previewFontSize + 'px';
-  $('previewFontDown').disabled = previewFontSize <= 12;
-  $('previewFontUp').disabled = previewFontSize >= 28;
+  $('previewFontReset').textContent = Number(previewFontSize.toFixed(1)) + 'px';
+  $('previewFontDown').disabled = previewFontSize <= 4;
+  $('previewFontUp').disabled = previewFontSize >= 72;
   if (remember) {
     try { localStorage.setItem('md-browser.previewFontSize', String(previewFontSize)); } catch {}
   }
 }
-$('previewFontDown').addEventListener('click', () => setPreviewFontSize(previewFontSize - 2));
-$('previewFontUp').addEventListener('click', () => setPreviewFontSize(previewFontSize + 2));
+$('previewFontDown').addEventListener('click', () => setPreviewFontSize(previewFontSize - 0.5));
+$('previewFontUp').addEventListener('click', () => setPreviewFontSize(previewFontSize + 0.5));
 $('previewFontReset').addEventListener('click', () => setPreviewFontSize(14));
 setPreviewFontSize(previewFontSize, false);
 
 let editorFontSize = 13;
 try {
   const savedSize = Number(localStorage.getItem('md-browser.editorFontSize'));
-  if (Number.isInteger(savedSize) && savedSize >= 12 && savedSize <= 28) editorFontSize = savedSize;
+  if (Number.isFinite(savedSize) && savedSize >= 4 && savedSize <= 72) editorFontSize = savedSize;
 } catch {}
 
 function setEditorFontSize(size, remember = true) {
-  editorFontSize = Math.max(12, Math.min(28, size));
-  const lineHeight = Math.round(editorFontSize * 27 / 13) + 'px';
+  editorFontSize = window.viewZoom.clamp(size, 4, 72);
+  const lineHeight = (editorFontSize * 27 / 13) + 'px';
   editorEl.style.fontSize = editorFontSize + 'px';
   editorEl.style.lineHeight = lineHeight;
   $('lineNumbers').style.fontSize = (editorFontSize - 1) + 'px';
   $('lineNumbers').style.lineHeight = lineHeight;
+  window.markdownWrap?.update();
   $('lineNumbers').scrollTop = editorEl.scrollTop;
   if (remember) {
     try { localStorage.setItem('md-browser.editorFontSize', String(editorFontSize)); } catch {}
@@ -444,34 +523,28 @@ function setEditorFontSize(size, remember = true) {
 }
 setEditorFontSize(editorFontSize, false);
 
-function enableControlZoom(pane, getSize, setSize) {
-  let accumulated = 0, lastWheelAt = 0;
+function enableControlZoom(pane, getSize, setSize, baseSize) {
   pane.addEventListener('wheel', event => {
-    if (!event.ctrlKey) { accumulated = 0; return; }
-    event.preventDefault();
-    event.stopPropagation();
-    if (!event.deltaY) return;
-    const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pane.clientHeight : 1);
-    const now = Date.now();
-    if (now - lastWheelAt > 250 || Math.sign(delta) !== Math.sign(accumulated)) accumulated = 0;
-    lastWheelAt = now;
-    accumulated += delta;
-    // Accumulate small trackpad movements to avoid jumping through sizes.
-    if (Math.abs(accumulated) < 40) return;
-    setSize(getSize() + (accumulated < 0 ? 1 : -1));
-    accumulated = 0;
+    if (!event.ctrlKey) return;
+    event.preventDefault();event.stopPropagation();
+    setSize(getSize() + window.viewZoom.delta(event, pane) * baseSize);
   }, { passive: false });
 }
-enableControlZoom(editorPane, () => editorFontSize, setEditorFontSize);
-enableControlZoom(previewPane, () => previewFontSize, setPreviewFontSize);
+enableControlZoom(editorPane, () => editorFontSize, setEditorFontSize, 13);
+enableControlZoom(previewPane, () => previewFontSize, setPreviewFontSize, 14);
 
 function applyViewMode() {
-  const pdf = state.currentFile?.kind === 'pdf';
-  $('markdownPanes').style.display = pdf ? 'none' : '';
+  const pdf = state.currentFile?.kind === 'pdf', word = state.currentFile?.kind === 'docx', media = !!window.mediaTypes?.isKind(state.currentFile?.kind);
+  const external = state.currentFile?.kind === 'external';
+  $('unsupportedPane').hidden = !external;
+  $('mediaPane').hidden = !media;
+  $('wordPane').hidden = !word;
+  $('markdownPanes').style.display = pdf || word || media || external ? 'none' : '';
   $('pdfPane').hidden = !pdf;
-  viewSeg.style.display = pdf ? 'none' : '';
-  $('textEncoding').hidden = pdf;
-  $('saveHint').hidden = pdf;
+  viewSeg.style.display = pdf || word || media || external ? 'none' : '';
+  $('textEncoding').hidden = pdf || word || media || external;
+  $('saveHint').hidden = pdf || media || external;
+  $('saveHint').textContent = word ? 'Ctrl+S 保存 Word' : '自动保存 · Ctrl+S 立即保存';
   const m = state.viewMode;
   if (m === 'split') {
     editorPane.style.display = '';
@@ -508,17 +581,19 @@ function promptName(title, def) {
   });
 }
 
-async function createFile() {
+async function createFile(local = false) {
   if (!state.connected) return;
-  if (!(await canDiscard())) return;
-  const name = await promptName('新建文件（以 .md 结尾）：', '未命名.md');
+  if (!(await (!local&&window.workspace?window.workspace.canReplaceActive():canDiscard()))) return;
+  let name = await promptName('新建 Markdown 文件（自动补全 .md 后缀）：', '未命名.md');
   if (!name) return;
+  if (!/\.(md|markdown)$/i.test(name)) name += '.md';
   const p = joinPath(state.currentDir, name);
   const res = await window.mdAPI.create(p, '# ' + name.replace(/\.(md|markdown)$/i, '') + '\n\n');
   if (res.ok) {
     await refreshDir();
     // 直接打开新文件
-    await openFile({ path: p, name, type: 'file' }, true);
+    await openFile({ path: p, name, type: 'file' }, true, local);
+    if (local) editorEl.focus();
     setStatus('已新建：' + name, 'ok');
   } else {
     setStatus('新建失败：' + res.error, 'error');
@@ -539,41 +614,126 @@ async function createDir() {
   }
 }
 
-async function importDocument() {
-  if (!state.connected || !(await canDiscard())) return;
-  setStatus('选择文档：PDF 保留原格式，Word / 文本转为 Markdown…');
-  const result = await window.mdAPI.importDocument();
-  if (!result.ok) { setStatus('导入失败：' + result.error, 'error'); return; }
-  if (!result.data) { setStatus('已取消导入'); return; }
-  const converted = result.data;
-  const pdf = converted.kind === 'pdf';
-  let suggested = converted.name;
-  while (true) {
-    const name = await promptName(pdf ? '导入 PDF（保留原格式）：' : '导入为 Markdown 文件：', suggested);
-    if (!name) { setStatus('已取消导入'); return; }
-    const extension = pdf ? '.pdf' : '.md';
-    const finalName = name.toLowerCase().endsWith(extension) ? name : name + extension;
-    const target = joinPath(state.currentDir, finalName);
-    const exists = await window.mdAPI.exists(target);
-    if (!exists.ok) { setStatus('检查文件名失败：' + exists.error, 'error'); return; }
-    if (exists.data) {
-      setStatus('同名文件已存在，请更换名称', 'error');
-      suggested = finalName.slice(0, -extension.length) + '（导入）' + extension;
-      continue;
+let cancelImport = false;
+$('cancelImport').addEventListener('click', () => {
+  cancelImport = true;
+  $('cancelImport').disabled = true;
+  $('importProgressText').textContent = '正在停止，将完成当前文件…';
+});
+
+async function importDocument(files) {
+  if (!state.connected) return;
+  if (!files) {
+    const selected = await window.mdAPI.selectImportDocuments();
+    if (!selected.ok) { setStatus('选择文件失败：' + selected.error, 'error'); return; }
+    files = selected.data;
+  }
+  if (!files?.length) { setStatus('已取消导入'); return; }
+  if (files.length === 1 && !(await (window.workspace?window.workspace.canReplaceActive():canDiscard()))) return;
+  const directory = state.currentDir, uploaded = [], details = [];
+  let hasWarnings = false;
+  let failed = 0, skipped = 0, completed = 0;
+  cancelImport = false;
+  $('cancelImport').disabled = false;
+  $('importProgress').hidden = false;
+  try {
+    for (const file of files) {
+      if (cancelImport) break;
+      $('importProgressText').textContent = '正在上传 ' + (completed + 1) + '/' + files.length + '：' + file.name;
+      setStatus($('importProgressText').textContent);
+      try {
+        const result = await window.mdAPI.convertImportDocument(file.path);
+        if (!result.ok) throw new Error(result.error);
+        if (cancelImport) break;
+        const converted = result.data, pdf = converted.kind === 'pdf', word = converted.kind === 'docx';
+        const extension = converted.media ? /\.[^.]+$/.exec(converted.name)[0].toLowerCase() : pdf ? '.pdf' : word ? '.docx' : '.md';
+        let name = converted.name;
+        if (files.length === 1) name = await promptName(converted.media ? '上传媒体文件（保留原格式）：' : pdf ? '导入 PDF（保留原格式）：' : word ? '导入 Word（保留原格式）：' : '导入为 Markdown 文件：', name);
+        while (name) {
+          // Apply the same validation to filesystem names as to manually entered names.
+          if (/[\\/:*?"<>|\u0000-\u001f]/.test(name) || name === '.' || name === '..' || !name.trim()) {
+            name = await promptName('文件名包含无效字符，请重新命名：', name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_'));
+            continue;
+          }
+          const finalName = name.toLowerCase().endsWith(extension) ? name : name + extension;
+          const target = joinPath(directory, finalName);
+          const exists = await window.mdAPI.exists(target);
+          if (!exists.ok) throw new Error(exists.error);
+          if (exists.data) {
+            name = await promptName('「' + finalName + '」已存在，请改名（取消跳过此文件）：', finalName.slice(0, -extension.length) + '（导入）' + extension);
+            continue;
+          }
+          if (cancelImport) { skipped++; details.push('已停止：' + file.name); break; }
+          const saved = converted.media ? await window.mdAPI.uploadMedia(target, converted.sourcePath) : pdf ? await window.mdAPI.createPDF(target, converted.bytes) : word ? await window.mdAPI.createWord(target, converted.bytes) : await window.mdAPI.create(target, converted.content);
+          if (!saved.ok) throw new Error(saved.error);
+          hasWarnings ||= converted.warnings.length > 0;
+          uploaded.push({ path: target, name: finalName, type: 'file' });
+          details.push('✓ ' + file.name + ' → ' + finalName + (converted.warnings.length ? '：' + converted.warnings.join('；') : ''));
+          break;
+        }
+        if (!name) { skipped++; details.push('跳过：' + file.name); }
+      } catch (error) {
+        failed++;
+        details.push('失败：' + file.name + ' — ' + error.message);
+      }
+      completed++;
     }
-    const saved = pdf ? await window.mdAPI.createPDF(target, converted.bytes) : await window.mdAPI.create(target, converted.content);
-    if (!saved.ok) { setStatus('上传失败：' + saved.error + '；原始本地文件不受影响', 'error'); return; }
+  } finally { $('importProgress').hidden = true; }
+  const remaining = files.length - completed;
+  if (remaining) details.push('已停止，剩余 ' + remaining + ' 个文件未上传');
+  if (uploaded.length) {
     await refreshDir();
-    await openFile({ path: target, name: finalName, type: 'file' }, true);
-    const message = '已导入：' + finalName + (converted.warnings.length ? ' · ' + converted.warnings.join(' ') : '');
-    setStatus(message, 'ok'); statusEl.title = message;
-    if (converted.warnings.length) {
-      $('importWarningsText').textContent = converted.warnings.join('\n');
-      $('importWarnings').showModal();
+    // Keep the current document during a batch; a single import still opens automatically.
+    if (files.length === 1) {
+      try { await openFile(uploaded[0], true); }
+      catch (error) { details.push('已上传，但预览失败：' + error.message); }
     }
+  }
+  const summary = '上传完成：成功 ' + uploaded.length + '，失败 ' + failed + '，跳过 ' + (skipped + remaining);
+  setStatus(summary, failed ? 'error' : 'ok');
+  statusEl.title = details.join('\n');
+  $('importWarningsText').textContent = summary + '\n\n' + details.join('\n');
+  if (files.length > 1 || failed || hasWarnings) $('importWarnings').showModal();
+}
+
+const importDropOverlay = $('importDropOverlay');
+const fileDrag = event => Array.from(event.dataTransfer?.types || []).includes('Files');
+const canDropFiles = () => state.connected && !state.busy && !document.querySelector('dialog[open]');
+let dragDepth = 0;
+function resetFileDrag() { dragDepth = 0; importDropOverlay.hidden = true; }
+document.addEventListener('dragenter', event => {
+  if (!fileDrag(event)) return;
+  event.preventDefault();
+  dragDepth++;
+  if (canDropFiles()) {
+    importDropOverlay.textContent = '松开以上传到「' + state.currentDir + '」';
+    importDropOverlay.hidden = false;
+  }
+}, true);
+document.addEventListener('dragover', event => {
+  if (!fileDrag(event)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = canDropFiles() ? 'copy' : 'none';
+}, true);
+document.addEventListener('dragleave', event => {
+  if (!fileDrag(event)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) resetFileDrag();
+}, true);
+document.addEventListener('drop', event => {
+  if (!fileDrag(event)) return;
+  event.preventDefault(); event.stopPropagation(); resetFileDrag();
+  if (!canDropFiles()) {
+    setStatus(state.connected ? '请先完成当前操作，再拖入文件' : '请先连接 WebDAV，再拖入文件', 'error');
     return;
   }
-}
+  try {
+    const files = window.mdAPI.droppedDocuments(Array.from(event.dataTransfer.files));
+    runAction(() => importDocument(files));
+  } catch (error) { setStatus('无法读取拖入的文件：' + error.message, 'error'); }
+}, true);
+window.addEventListener('blur', resetFileDrag);
+document.addEventListener('dragend', resetFileDrag);
 
 function normalizedPath(path) { return path.replace(/\/+$/, '') || '/'; }
 function containsPath(parent, child) {
@@ -606,6 +766,8 @@ async function showFileMenu(item) {
   if (!state.connected) return;
   const choice = await window.mdAPI.fileMenu(item.type === 'directory');
   if (!choice.ok) { setStatus(choice.error, 'error'); return; }
+  if (['open-left','open-right'].includes(choice.data)) { await (window.workspace||window.paneHost).open(item,choice.data==='open-left'?'left':'right',!window.isPaneChild); return; }
+  if (choice.data === 'copy') await copyItem(item);
   if (choice.data === 'rename') await renameItem(item);
   if (choice.data === 'delete') await deleteItem(item);
   if (choice.data === 'move') {
@@ -618,19 +780,40 @@ async function showFileMenu(item) {
   }
 }
 
+async function copyItem(item) {
+  if (!state.connected || item.type === 'directory') return;
+  const dot = item.name.lastIndexOf('.');
+  const ext = dot > 0 ? item.name.slice(dot) : '';
+  const base = ext ? item.name.slice(0, dot) : item.name;
+  let name = await promptName('复制文件：输入副本名称', base + ' - 副本' + ext);
+  if (!name) return;
+  if (ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
+  const target = joinPath(item.path.slice(0, item.path.lastIndexOf('/')) || '/', name);
+  const res = await window.mdAPI.copy(item.path, target);
+  if (!res.ok) { setStatus('复制失败：' + res.error, 'error'); return; }
+  await refreshDir();
+  setStatus('已复制：' + name, 'ok');
+}
+
 async function renameItem(item) {
   let name = await promptName('重命名为：', item.name);
-  if (name && /\.pdf$/i.test(item.name) && !/\.pdf$/i.test(name)) name += '.pdf';
+  const extension = (window.mediaTypes?.type(item.name) ? /\.[^.]+$/.exec(item.name)?.[0] : /\.(pdf|docx)$/i.exec(item.name)?.[0])?.toLowerCase();
+  if (name && extension && !name.toLowerCase().endsWith(extension)) name += extension;
   if (!name || name === item.name) return;
   await relocateItem(item, joinPath(parentPath(item.path), name));
 }
 
 async function relocateItem(item, to) {
+  const host=window.workspace||window.paneHost;
+  if(host&&!host.mutationAllowed(window.isPaneChild?'secondary':'primary')){setStatus('另一栏正在保存或加载，请稍后再试');return;}
   const from = normalizedPath(item.path);
   to = normalizedPath(to);
   if (containsPath(from, to)) { setStatus('不能移动到自身或子目录', 'error'); return; }
   const affectsOpen = state.currentFile && containsPath(from, state.currentFile.path);
   if (affectsOpen && isDirty()) persistDraft();
+  const resume=host?.beginMutation(from,window.isPaneChild?'secondary':'primary');
+  if(host&&!resume){setStatus('另一栏正在保存，请稍后再试','error');return;}
+  try {
   const res = await window.mdAPI.rename(from, to);
   if (!res.ok) { setStatus('移动或重命名失败：' + res.error, 'error'); return; }
   const draftsOk = updateItemDrafts(from, to);
@@ -638,18 +821,26 @@ async function relocateItem(item, to) {
     state.currentFile.path = to + state.currentFile.path.slice(from.length);
     state.currentFile.name = state.currentFile.path.split('/').pop();
     docNameEl.textContent = state.currentFile.name;
+    if (window.mediaTypes?.isKind(state.currentFile.kind)) await window.mediaViewer.relocated(from, to);
     persistDraft();
   }
   if (containsPath(from, state.currentDir)) state.currentDir = to + normalizedPath(state.currentDir).slice(from.length);
+  await host?.moved(from,to,window.isPaneChild?'secondary':'primary');
   await refreshDir();
   setStatus(draftsOk ? '已移动至 ' + to : '远程操作已完成，本地草稿迁移失败，原草稿仍保留', draftsOk ? 'ok' : 'error');
+  } finally { resume?.(); }
 }
 
 async function deleteItem(item) {
+  const host=window.workspace||window.paneHost;
+  if(host&&!host.mutationAllowed(window.isPaneChild?'secondary':'primary')){setStatus('另一栏正在保存或加载，请稍后再试');return;}
   const from = normalizedPath(item.path);
   const affectsOpen = state.currentFile && containsPath(from, state.currentFile.path);
-  const confirm = await window.mdAPI.confirmDelete({ name: item.name, folder: item.type === 'directory', dirty: !!affectsOpen && (isDirty() || !!window.pdfAnnotations?.dirty()) });
+  const confirm = await window.mdAPI.confirmDelete({ name: item.name, folder: item.type === 'directory', dirty: !!host?.anyDirtyPath(from) || !!affectsOpen && (isDirty() || !!window.pdfAnnotations?.dirty()) });
   if (!confirm.ok || !confirm.data) return;
+  const resume=host?.beginMutation(from,window.isPaneChild?'secondary':'primary');
+  if(host&&!resume){setStatus('另一栏正在保存，请稍后再试','error');return;}
+  try {
   const res = await window.mdAPI.remove(from);
   if (!res.ok) { setStatus('删除失败：' + res.error, 'error'); return; }
   const draftsOk = updateItemDrafts(from, null);
@@ -660,8 +851,10 @@ async function deleteItem(item) {
     updateEditorUI(false);
   }
   if (containsPath(from, state.currentDir)) state.currentDir = parentPath(from);
+  host?.deleted(from,window.isPaneChild?'secondary':'primary');
   await refreshDir();
   setStatus(draftsOk ? '已删除：' + item.name : '远程项目已删除，但本地草稿清理失败', draftsOk ? 'ok' : 'error');
+  } finally { resume?.(); }
 }
 
 async function renameCurrent() {
@@ -729,7 +922,7 @@ function escapeHtml(s) {
 
 // ---------- 事件绑定 ----------
 async function exportCurrentPDF() {
-  if (!state.currentFile || state.currentFile.kind === 'pdf') return;
+  if (!state.currentFile || ['pdf','docx','audio','video','image','external'].includes(state.currentFile.kind)) return;
   setStatus('正在整理 PDF 排版…');
   const result = await window.mdAPI.exportPDF({
     title: state.currentFile.name.replace(/\.(md|markdown|mdown|mkd)$/i, ''),
@@ -776,6 +969,7 @@ async function restoreConnection(autoConnect = false) {
   } catch { setStatus('无法读取已保存密码，请手动输入', 'error'); }
 }
 function showConnection() {
+  if(window.isPaneChild){parent.document.getElementById('connectionSettings').click();return;}
   $('connectionMessage').textContent = '';
   $('connectionDialog').showModal();
   if (!state.connected && !connPass.value) restoreConnection();
@@ -803,6 +997,8 @@ try {
 } catch {}
 let closeApproved = false;
 window.addEventListener('beforeunload', (event) => {
+  if(window.isPaneChild)return;
+  if(window.workspace){window.workspace.requestClose(event);return;}
   if (closeApproved || (!state.busy && !isDirty() && !window.pdfAnnotations?.dirty())) return;
   persistDraft();
   event.preventDefault();
@@ -894,4 +1090,4 @@ setConnUI(false);
 renderCrumb();
 renderList();
 syncControls();
-restoreConnection(true);
+if(!window.isPaneChild)restoreConnection(true);

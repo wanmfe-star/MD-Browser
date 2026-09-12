@@ -3,29 +3,33 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'self' blob:" />
-  <title>MD Browser</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data: mdmedia:; media-src 'self' mdmedia: blob:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'self' blob:" />
+  <title>MD Browser</title><script src="./pane-bootstrap.js"></script>
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <div id="importDropOverlay" class="import-drop-overlay" hidden></div>
   <div class="titlebar">MD Browser</div>
   <div class="layout">
     <aside class="sidebar">
       <div class="brand"><img class="brand-logo" src="../assets/logo.svg" alt="" /> MD Browser</div>
-      <button id="connectionSettings" class="connection-card" title="连接设置">
-        <span class="cloud-icon">☁</span><span class="connection-copy"><strong id="connectionName">远程文档</strong><span id="connectionState">未连接 · 点击设置</span></span><span class="settings-symbol">⚙</span>
-      </button>
-      <div class="sidebar-heading"><span>文件</span><div class="toolbar"><button id="importFile" class="icon-btn" title="导入 PDF 原文件，或将 Word / 文本转换为 Markdown" aria-label="导入文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11 M8 10l4 4 4-4 M4 15v5h16v-5"/></svg></button>
+      <div class="sidebar-heading"><span>文件</span><div class="toolbar"><button id="importFile" class="icon-btn" title="批量导入文档、音乐、视频和图片，也可拖入文件" aria-label="导入文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11 M8 10l4 4 4-4 M4 15v5h16v-5"/></svg></button>
         <button id="newFile" class="icon-btn" title="新建 Markdown 文件" aria-label="新建文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16 M4 12h16"/></svg></button>
         <button id="newDir" class="icon-btn" title="新建文件夹" aria-label="新建文件夹"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5h6l2 2h10v13H3Z M12 10v7 M8.5 13.5h7"/></svg></button>
         <button id="refresh" class="icon-btn" title="刷新" aria-label="刷新"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10a8 8 0 1 0 0 5 M20 4v6h-6"/></svg></button>
       </div></div>
       <div id="directoryLabel" class="directory-label">我的文档</div>
+      <p class="import-hint">可拖入文件上传 · 支持多选</p>
+      <div id="importProgress" class="import-progress" hidden><span id="importProgressText" role="status"></span><button id="cancelImport" type="button">停止</button></div>
       <ul class="filelist" id="filelist"></ul>
-      <div class="sidebar-footer"><span id="connectionDot" class="connection-dot"></span><span id="sidebarStatus">尚未连接 WebDAV</span></div>
+      <div class="sidebar-footer"><span id="connectionDot" class="connection-dot"></span><span id="sidebarStatus">尚未连接 WebDAV</span><button id="connectionSettings" class="icon-btn" type="button" title="连接设置" aria-label="连接设置"><span aria-hidden="true">⚙</span></button></div>
     </aside>
-    <main class="content">
+    <div id="workspaceShell" class="workspace"><div class="workspace-toolbar">
+      <details id="splitMenu"><summary id="splitTrigger" class="workspace-icon" aria-label="开启双栏" aria-expanded="false" aria-controls="splitOptions" title="开启双栏"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 4v16"/></svg></summary><div id="splitOptions" class="split-options"><p>当前文件放置位置</p><div class="split-choices"><button id="splitKeepLeft" title="当前文件放左栏，右栏选择其他文件" aria-label="当前文件放左栏"><svg viewBox="0 0 64 44" aria-hidden="true"><rect class="split-window" x="2" y="2" width="60" height="40" rx="6"/><rect class="split-selected" x="6" y="6" width="24" height="32" rx="3"/><path d="M33 6v32"/></svg><span>左栏</span></button><button id="splitKeepRight" title="当前文件放右栏，左栏选择其他文件" aria-label="当前文件放右栏"><svg viewBox="0 0 64 44" aria-hidden="true"><rect class="split-window" x="2" y="2" width="60" height="40" rx="6"/><rect class="split-selected" x="35" y="6" width="23" height="32" rx="3"/><path d="M31 6v32"/></svg><span>右栏</span></button></div></div></details>
+      <span id="workspaceHint">单栏</span><span id="workspaceNotice" role="status"></span><button id="swapPanes" class="workspace-icon" title="交换左右" aria-label="交换左右" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4"/></svg></button><button id="collapsePanes" class="workspace-icon" title="恢复单栏，保留当前操作栏" aria-label="恢复单栏" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/></svg></button>
+    </div><div id="workspacePanes" class="workspace-panes">
+    <main class="content" id="primaryPane" tabindex="-1">
       <header class="document-header">
         <div class="crumb" id="crumb"></div>
         <div class="document-tools"><div class="document-title"><h1 id="docName">你的下一页，从这里开始</h1><button id="dirty" class="save-status" disabled></button></div>
@@ -42,22 +46,48 @@
 <button data-format="bold" title="加粗（⌘/Ctrl+B）" aria-label="加粗"><b>B</b></button><button data-format="italic" title="斜体（⌘/Ctrl+I）" aria-label="斜体"><i>I</i></button><button data-format="strike" title="删除线" aria-label="删除线"><s>S</s></button>
 <span class="format-divider"></span><button data-format="link" title="链接（⌘/Ctrl+K）" aria-label="插入链接">↗</button><button data-format="image" title="图片" aria-label="插入图片">▧</button><button data-format="code" title="行内代码" aria-label="行内代码">&lt;/&gt;</button><button data-format="block" title="代码块" aria-label="代码块">{ }</button>
 <span class="format-divider"></span><button data-format="bullet" title="无序列表" aria-label="无序列表">• ≡</button><button data-format="ordered" title="有序列表" aria-label="有序列表">1.</button><button data-format="task" title="待办列表" aria-label="待办列表">☑</button><button data-format="quote" title="引用" aria-label="引用">❞</button><button data-format="rule" title="分隔线" aria-label="分隔线">—</button>
-</div><div class="editor-surface"><div id="lineNumbers" class="line-numbers" aria-hidden="true">1</div><textarea id="editor" placeholder="连接远程存储，选择或新建一篇文档…" spellcheck="false" wrap="off" aria-label="Markdown 编辑器"></textarea></div></section>
+</div><div class="editor-surface"><div id="lineNumbers" class="line-numbers" aria-hidden="true">1</div><textarea id="editor" placeholder="连接远程存储，选择或新建一篇文档…" spellcheck="false" wrap="soft" aria-label="Markdown 编辑器"></textarea></div></section>
         <section class="pane preview-pane" id="previewPane"><div class="pane-heading" title="按住 Control 滚动鼠标滚轮可调整预览字号">预览 <div class="preview-font-controls" role="group" aria-label="预览字号"><button id="previewFontDown" title="缩小预览字号" aria-label="缩小预览字号">A−</button><button id="previewFontReset" title="恢复默认字号（14px）" aria-label="恢复默认预览字号">14px</button><button id="previewFontUp" title="放大预览字号" aria-label="放大预览字号">A＋</button></div></div><div class="preview-scroll"><article class="markdown-body" id="preview"><div class="placeholder"><img class="welcome-logo" src="../assets/logo.svg" alt="MD Browser" /><h2>给思考一点空间</h2><p>连接你的 WebDAV 存储，<br>让文档随手可读，让灵感随时落笔。</p><button id="welcomeConnect" class="btn primary">连接远程存储 <span>↗</span></button><small>支持坚果云、Nextcloud 与其他 WebDAV 服务</small></div></article></div></section>
       </div>
+      <section id="unsupportedPane" class="unsupported-pane" hidden>
+        <div class="unsupported-card"><div class="unsupported-icon" aria-hidden="true">↗</div><h2>此文件暂不支持在软件内预览</h2><p>可以使用电脑上的默认程序打开。</p><button id="openSystemFile" class="btn primary">使用系统默认程序打开</button><p id="systemOpenMessage" role="status"></p><small>文件将下载为本机副本。外部编辑不会自动同步回 NAS，修改后请自行上传。</small></div>
+      </section>
+      <section id="mediaPane" class="media-pane" hidden>
+        <div class="media-toolbar"><strong id="mediaLabel"></strong><span id="mediaPosition"></span><button id="mediaPrevious">上一项</button><button id="mediaNext">下一项</button><span class="media-toolbar-spacer"></span><span id="mediaMessage" role="status"></span><button id="mediaRetry">重新加载</button></div>
+        <div id="audioPanel" class="audio-panel" hidden><div class="audio-card"><div class="audio-art" aria-hidden="true">♫</div><h2 id="audioTitle"></h2><audio id="mediaAudio" controls preload="metadata"></audio><button id="audioLoop" class="audio-loop" aria-pressed="false">单曲循环：关</button></div><div class="audio-queue"><h3>当前目录播放列表</h3><div id="audioPlaylist"></div></div></div>
+        <div id="videoStage" class="video-stage" hidden><video id="mediaVideo" controls preload="metadata" playsinline></video><button id="videoFullscreen" class="video-fullscreen">全屏</button></div>
+        <div id="imagePanel" class="image-panel" hidden><div class="image-toolbar"><button id="imageZoomOut" aria-label="缩小图片">−</button><span id="imageScale">100%</span><button id="imageZoomIn" aria-label="放大图片">＋</button><button id="imageFit">适应窗口</button><button id="imageRotate">旋转 90°</button></div><div id="imageScroll" class="image-scroll"><div id="imageCanvas"><img id="mediaImage" alt="" /></div></div></div>
+      </section>
+      <section id="wordPane" class="word-pane" hidden>
+        <div id="wordToolbar" class="word-toolbar" role="toolbar" aria-label="Word 文字与段落排版">
+          <label>字体 <select id="wordFont" data-text-format aria-label="Word 字体"><option value="">原字体 / 混合</option><option>宋体</option><option>微软雅黑</option><option>黑体</option><option>楷体</option><option>仿宋</option><option>Arial</option><option>Times New Roman</option><option>Calibri</option></select></label>
+          <label>字号 <input id="wordSize" data-text-format type="number" min="6" max="96" step="0.5" placeholder="原字号" aria-label="Word 字号（磅）" /></label>
+          <label>颜色 <input id="wordColor" data-text-format type="color" value="#26352d" aria-label="Word 字体颜色" /></label>
+          <button id="wordBold" data-text-format aria-pressed="false" title="加粗（Ctrl+B）"><b>B</b></button><button id="wordItalic" data-text-format aria-pressed="false" title="斜体（Ctrl+I）"><i>I</i></button><button id="wordUnderline" data-text-format aria-pressed="false" title="下划线（Ctrl+U）"><u>U</u></button><button id="wordStrike" data-text-format aria-pressed="false" title="删除线"><s>S</s></button>
+          <label>对齐 <select id="wordAlign" data-paragraph aria-label="段落对齐"><option value="left">左对齐</option><option value="center">居中</option><option value="right">右对齐</option><option value="justify">两端对齐</option></select></label>
+          <label>行距 <select id="wordLine" data-paragraph aria-label="段落行距"><option value="1">单倍</option><option value="1.25">1.25 倍</option><option value="1.5">1.5 倍</option><option value="2">双倍</option><option value="3">3 倍</option></select></label>
+          <label>段前 <select id="wordBefore" data-paragraph aria-label="段前间距"><option value="0">0 磅</option><option value="6">6 磅</option><option value="12">12 磅</option><option value="18">18 磅</option><option value="24">24 磅</option></select></label>
+          <label>段后 <select id="wordAfter" data-paragraph aria-label="段后间距"><option value="0">0 磅</option><option value="6">6 磅</option><option value="8">8 磅</option><option value="12">12 磅</option><option value="18">18 磅</option><option value="24">24 磅</option></select></label>
+          <button id="wordIndent" data-paragraph>首行缩进</button><button id="wordAddParagraph">新增段落</button><button id="wordDeleteParagraph" data-paragraph>删除段落</button>
+          <span class="word-toolbar-spacer"></span><button id="wordUndo" title="撤销（Ctrl+Z）">撤销</button><button id="wordRedo" title="重做（Ctrl+Y）">重做</button><button id="wordZoomOut" aria-label="缩小 Word 页面">−</button><button id="wordZoomReset" title="恢复 100% · Ctrl＋滚轮缩放">100%</button><button id="wordZoomIn" aria-label="放大 Word 页面">＋</button><button id="wordSave" class="btn primary">保存 Word</button>
+        </div>
+        <p id="wordNotice" class="word-notice"></p>
+        <div id="wordScroll" class="word-scroll"><article id="wordPage" class="word-page" aria-label="Word 单页编辑区"></article></div>
+      </section>
       <section id="pdfPane" class="pdf-pane" hidden><iframe id="pdfViewer" title="PDF 文档预览"></iframe><div id="pdfAnnotationPanel" hidden>
 <div class="pdf-canvas-scroll"><div id="pdfCanvasWrap"><canvas id="pdfPageCanvas"></canvas><canvas id="pdfOverlayCanvas"></canvas><div id="pdfTextLayer" class="textLayer"></div></div></div>
-</div><div class="pdf-reading-bar"><span id="pdfAnnotationStatus" role="status"></span><div class="pdf-pagination"><button id="pdfPrevious" title="上一页" aria-label="上一页">‹</button><input id="pdfPageJump" type="number" min="1" value="1" aria-label="跳转页码"><span id="pdfPageNumber"></span><button id="pdfNext" title="下一页" aria-label="下一页">›</button></div>
+</div><div class="pdf-reading-bar"><span id="pdfAnnotationStatus" role="status"></span><div class="pdf-pagination"><button id="pdfPrevious" title="上一页" aria-label="上一页">↑</button><input id="pdfPageJump" type="number" min="1" value="1" aria-label="跳转页码"><span id="pdfPageNumber"></span><button id="pdfNext" title="下一页" aria-label="下一页">↓</button></div>
 <details id="pdfReadingMenu"><summary aria-label="阅读选项" title="阅读选项">···</summary><div class="pdf-reading-menu"><button id="pdfSaveAnnotations">保存 PDF <small>⌘S</small></button><button id="pdfUndo">撤销标注 <small>⌘Z</small></button><button id="pdfClearAnnotations">清除全部标注</button><hr><div class="pdf-zoom-row"><button id="pdfZoomOut" aria-label="缩小">−</button><button id="pdfZoomFit">适宽</button><button id="pdfZoomIn" aria-label="放大">＋</button></div><hr><button id="pdfAnnotate">原版阅读器</button></div></details></div></section>
       <footer class="statusbar"><span id="status" class="status" role="status">准备就绪</span><div><span id="wordCount">0 字</span><span id="textEncoding">UTF-8</span><span id="cursorPosition">Ln 1, Col 1</span><span id="saveHint">自动保存 · ⌘S 立即保存</span></div></footer>
     </main>
+    </div></div>
   </div>
   <dialog id="connectionDialog"><form id="connectionForm"><div class="dialog-heading"><h2>连接远程存储</h2><button type="button" id="closeConnection" class="icon-btn" aria-label="关闭">×</button></div><p class="dialog-description">让你的 Markdown 文档，随处可读可写。</p><label for="connUrl">WebDAV 地址</label><input id="connUrl" type="url" placeholder="https://dav.jianguoyun.com/dav/" required /><label for="connUser">账号 / 邮箱</label><input id="connUser" type="text" autocomplete="username" placeholder="你的账号" /><label for="connPass">应用密码</label><input id="connPass" type="password" autocomplete="off" placeholder="输入 WebDAV 应用密码" /><p class="field-note">连接成功后，密码会加密保存在本机，下次打开自动连接。</p><button id="forgetPassword" class="forget-password" type="button">清除已保存密码</button><p id="connectionMessage" role="status"></p><div class="dialog-actions"><button id="discBtn" class="btn" type="button" disabled>断开连接</button><button id="connBtn" class="btn primary" type="submit">连接</button></div></form></dialog>
-  <dialog id="importWarnings"><form method="dialog"><h2>文档已导入</h2><p id="importWarningsText" class="import-warnings"></p><div class="dialog-actions"><button class="btn primary">知道了</button></div></form></dialog>
+  <dialog id="importWarnings"><form method="dialog"><h2>导入结果</h2><p id="importWarningsText" class="import-warnings"></p><div class="dialog-actions"><button class="btn primary">知道了</button></div></form></dialog>
   <dialog id="moveDialog"><div class="dialog-heading"><h2>移动到</h2><button id="moveCancel" class="icon-btn" aria-label="取消移动">×</button></div><p id="moveItemName" class="dialog-description"></p><div class="move-navigation"><button id="moveUp" class="btn">返回上级</button><span id="movePath">/</span></div><div id="moveFolders" class="move-folders"></div><p id="moveMessage" role="status"></p><div class="dialog-actions"><button id="moveConfirm" class="btn primary">移动到此目录</button></div></dialog>
   <dialog id="nameDialog"><form id="nameForm" method="dialog"><label id="nameTitle" for="nameInput"></label><input id="nameInput" type="text" autocomplete="off" required /><div class="dialog-actions"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" value="ok" type="submit">确定</button></div></form></dialog>
 <div id="pdfSelectionToolbar" class="pdf-selection-toolbar" role="toolbar" aria-label="选中文字操作" hidden><button id="pdfTextCopy">复制</button><span></span><button id="pdfTextHighlight">高亮</button><button id="pdfTextUnderline">下划线</button><button id="pdfDeleteAnnotation" hidden>删除标注</button></div>
 
-  <script src="../node_modules/marked/marked.min.js"></script><script src="../node_modules/dompurify/dist/purify.min.js"></script><script src="./document-style.js"></script><script src="./format.js"></script><script src="./pdf-annotations.js"></script><script src="./app.js"></script>
+  <script src="../node_modules/marked/marked.min.js"></script><script src="../node_modules/dompurify/dist/purify.min.js"></script><script src="./document-style.js"></script><script src="./format.js"></script><script src="./view-zoom.js"></script><script src="./pdf-annotations.js"></script><script src="../shared/word-runs.js"></script><script src="./word-editor.js"></script><script src="../shared/media-types.js"></script><script src="./media-viewer.js"></script><script src="./app.js"></script><script src="./editor-wrap.js"></script><script src="./pane-api.js"></script><script src="./workspace.js"></script>
 </body>
 </html>

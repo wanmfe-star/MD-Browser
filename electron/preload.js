@@ -1,7 +1,7 @@
 // 预加载脚本：通过 contextBridge 暴露安全的 API 给渲染进程
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('mdAPI', {
   copyText: (text) => ipcRenderer.invoke('app:copy-text', text),
@@ -11,9 +11,19 @@ contextBridge.exposeInMainWorld('mdAPI', {
   disconnect: () => ipcRenderer.invoke('webdav:disconnect'),
   list: (dir) => ipcRenderer.invoke('webdav:list', dir),
   read: (p) => ipcRenderer.invoke('webdav:read', p),
+  uploadMedia: (target, source) => ipcRenderer.invoke('media:upload', target, source),
+  openSystemFile: (p) => ipcRenderer.invoke('app:open-system-file', p),
+  openMedia: (p) => ipcRenderer.invoke('media:open', p),
+  releaseMedia: (url) => ipcRenderer.invoke('media:release', url),
+  readWord: (p) => ipcRenderer.invoke('word:read', p),
+  createWord: (p, bytes) => ipcRenderer.invoke('word:create', p, bytes),
+  saveWord: (payload) => ipcRenderer.invoke('word:save', payload),
   readPDF: (p) => ipcRenderer.invoke('webdav:read-pdf', p),
   createPDF: (p, bytes) => ipcRenderer.invoke('webdav:create-pdf', p, bytes),
   exists: (p) => ipcRenderer.invoke('webdav:exists', p),
+  selectImportDocuments: () => ipcRenderer.invoke('app:select-import-documents'),
+  convertImportDocument: (filePath) => ipcRenderer.invoke('app:convert-import-document', filePath),
+  droppedDocuments: (files) => files.map(file => ({ name: file.name, path: webUtils.getPathForFile(file) })),
   importDocument: () => ipcRenderer.invoke('app:import-document'),
   inspectPDFAnnotations: (bytes) => ipcRenderer.invoke('app:inspect-pdf-annotations', bytes),
   previewPDFAnnotations: (payload) => ipcRenderer.invoke('app:preview-pdf-annotations', payload),
@@ -26,6 +36,7 @@ contextBridge.exposeInMainWorld('mdAPI', {
   recoverDraft: (conflict) => ipcRenderer.invoke('app:recover-draft', conflict),
   mkdir: (p) => ipcRenderer.invoke('webdav:mkdir', p),
   remove: (p) => ipcRenderer.invoke('webdav:delete', p),
+  copy: (from, to) => ipcRenderer.invoke('webdav:copy', from, to),
   rename: (from, to) => ipcRenderer.invoke('webdav:rename', from, to),
   fileMenu: (folder) => ipcRenderer.invoke('app:file-menu', folder),
   confirmDelete: (item) => ipcRenderer.invoke('app:confirm-delete', item),

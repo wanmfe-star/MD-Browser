@@ -1,0 +1,90 @@
+require('../electron/media-protocol');
+'use strict';
+const {app,dialog}=require('electron');
+const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+const {fixture}=require('./test-docx.cjs');const {PDFDocument}=require('pdf-lib');
+app.setPath('userData',path.join(os.tmpdir(),'workspace-ui-'+process.pid));
+let server;const timeout=setTimeout(()=>{console.error('Workspace test timeout');app.exit(1);},60000);
+(async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'workspace-files-'));
+ await fs.writeFile(path.join(root,'a.md'),'# Left notes');await fs.writeFile(path.join(root,'b.md'),'# Other notes');await fs.writeFile(path.join(root,'word.docx'),await fixture());
+ const pdf=await PDFDocument.create();for(let i=0;i<3;i++)pdf.addPage([400,600]).drawText('PDF reference page '+(i+1),{x:20,y:500,size:16});await fs.writeFile(path.join(root,'ref.pdf'),await pdf.save());
+ server=await(await import('./mock-webdav.mjs')).startWebDAVServer(root);
+ const ready=new Promise(resolve=>app.once('browser-window-created',(_event,win)=>{win.hide();win.webContents.once('did-finish-load',()=>resolve(win));}));require('../electron/main');const win=await ready;win.webContents.setBackgroundThrottling(false);
+ const js=code=>win.webContents.executeJavaScript(code,true);
+ const open=(name)=>js('runAction(()=>openFile({name:'+JSON.stringify(name)+',path:'+JSON.stringify('/'+name)+'}))');
+ await js('connUrl.value='+JSON.stringify('http://127.0.0.1:'+server.port)+';runAction(doConnect)');
+ assert.equal(await js('workspace.inspect().split'),false);assert.equal(await js('document.querySelector(".secondary-pane")'),null);
+ await open('a.md');assert.equal(await js('editorEl.value'),'# Left notes');
+ await js('editorEl.value="# Unsaved left";editorEl.dispatchEvent(new Event("input"));clearTimeout(autoSaveTimer)');
+ await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+ const trigger=await js('(()=>{const r=$("splitTrigger").getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()');
+ win.webContents.debugger.attach('1.3');await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mouseMoved',...trigger});await new Promise(r=>setTimeout(r,280));assert.equal(await js('$("splitMenu").open'),true,'hover opens split layout chooser');
+ assert.equal(await js('$("splitTrigger").getAttribute("aria-expanded")'),'true');
+ await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await fs.writeFile(path.join(__dirname,'../.electron-cache/split-hover.png'),(await win.webContents.capturePage()).toPNG());
+ const choice=await js('(()=>{const r=$("splitKeepRight").getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()');
+ await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mouseMoved',...choice});await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,...choice});await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,...choice});win.webContents.debugger.detach();
+ for(let i=0;i<300&&!await js('workspace.inspect().split');i++)await new Promise(r=>setTimeout(r,20));
+ assert.equal(await js('workspace.inspect().split'),true);assert.equal(await js('$("collapsePanes").textContent.trim()'),'');
+ assert.deepEqual(await js('workspace.inspect().order'),['secondary','primary']);assert.equal(await js('editorEl.value'),'# Unsaved left');
+ const frame=win.webContents.mainFrame.frames.find(f=>f.url.includes('pane=secondary'));assert.ok(frame);const second=code=>frame.executeJavaScript(code,true);
+ assert.equal(await second('document.querySelector(".sidebar").getBoundingClientRect().width'),0);
+ assert.equal(await second('docNameEl.textContent'),'选择文件打开');
+ async function createFromEmpty(evaluate,name){
+   const inputName=name;name=/\.(md|markdown)$/i.test(name)?name:name+".md";
+   assert.equal(await evaluate('$("emptyCreateMarkdown").disabled'),false);
+   await evaluate('$("emptyCreateMarkdown").click()');
+   for(let i=0;i<200&&!await evaluate('$("nameDialog").open');i++)await new Promise(r=>setTimeout(r,20));
+   assert.equal(await evaluate('$("nameDialog").open'),true);
+   await evaluate('$("nameInput").value='+JSON.stringify(inputName)+';$("nameForm").requestSubmit($("nameForm").querySelector("[value=ok]"))');
+   for(let i=0;i<300&&await evaluate('state.busy');i++)await new Promise(r=>setTimeout(r,20));
+   assert.equal(await evaluate('state.currentFile?.name'),name);
+   assert.equal(await evaluate('state.viewMode'),'edit');
+   assert.equal(await evaluate('editorEl.readOnly'),false);
+   assert.equal(await fs.readFile(path.join(root,name),'utf8'),'# '+name.replace(/\.md$/,'')+'\n\n');
+ }
+ await second('$("emptyCreateMarkdown").click()');
+ for(let i=0;i<200&&!await second('$("nameDialog").open');i++)await new Promise(r=>setTimeout(r,20));
+ await second('$("nameForm").querySelector("[value=cancel]").click()');
+ for(let i=0;i<200&&await second('state.busy');i++)await new Promise(r=>setTimeout(r,20));
+ assert.equal(await second('state.currentFile'),null,'cancel leaves empty pane');
+ await createFromEmpty(second,'secondary-note');
+ assert.equal(await js('editorEl.value'),'# Unsaved left','creation preserves other pane edits');
+
+ await js('workspace.activate("secondary")');await open('word.docx');assert.equal(await second('state.currentFile.kind'),'docx');assert.equal(await js('state.currentFile.name'),'a.md');
+ await second('(()=>{const p=document.querySelector(".word-paragraph");p.focus();const r=document.createRange();r.selectNodeContents(p);getSelection().removeAllRanges();getSelection().addRange(r);document.execCommand("insertText",false,"Saved from active pane");})()');
+ await js('document.dispatchEvent(new KeyboardEvent("keydown",{key:"s",ctrlKey:true,bubbles:true,cancelable:true}))');for(let i=0;i<200&&await second('state.busy');i++)await new Promise(r=>setTimeout(r,20));assert.equal(await second('wordEditor.dirty()'),false);assert.equal((await require('../electron/docx').inspectDocx(await fs.readFile(path.join(root,'word.docx')))).blocks[0].text,'Saved from active pane');
+ await second('$("wordZoomOut").click();$("wordScroll").scrollTop=90');const zoom=await second('$("wordPage").style.zoom');
+ await js('workspace.swap()');assert.deepEqual(await js('workspace.inspect().order'),['primary','secondary']);assert.equal(await second('$("wordPage").style.zoom'),zoom);assert.equal(await js('editorEl.value'),'# Unsaved left');
+ // Real pointer drag across the iframe boundary.
+ await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');const rect=await js('(()=>{const r=document.querySelector(".workspace-divider").getBoundingClientRect();return {x:Math.round(r.left+4),y:Math.round(r.top+100)};})()');
+ win.webContents.debugger.attach('1.3');
+ await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mouseMoved',...rect});
+ await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,...rect});
+ await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mouseMoved',button:'left',buttons:1,x:rect.x+120,y:rect.y});
+ await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,x:rect.x+120,y:rect.y});win.webContents.debugger.detach();await new Promise(r=>setTimeout(r,200));
+ assert.ok(await js('workspace.inspect().ratio')>0.55,'divider drag changes ratio');
+ await js('workspace.activate("secondary");workspace.collapse()');assert.equal(await js('workspace.inspect().split'),false);assert.equal(await js('document.getElementById("primaryPane").hidden'),true);assert.equal(await fs.readFile(path.join(root,'a.md'),'utf8'),'# Unsaved left','collapse saves other pane');assert.equal(await second('state.currentFile.name'),'word.docx');
+ await js('workspace.enable("left")');assert.deepEqual(await js('workspace.inspect().order'),['secondary','primary']);await createFromEmpty(js,'primary-note.md');assert.equal(await second('state.currentFile.name'),'word.docx');await js('workspace.activate("primary")');await open('a.md');
+ await js('workspace.activate("secondary")');await open('a.md');assert.equal(await js('workspace.inspect().active'),'primary','same file focuses existing pane');assert.equal(await second('state.currentFile.name'),'word.docx');
+ await js('workspace.activate("secondary")');await open('ref.pdf');assert.equal(await second('state.currentFile.kind'),'pdf');assert.equal(await second('document.querySelectorAll(".pdf-page-wrap").length'),3);assert.equal(await js('state.currentFile.name'),'a.md');
+ await js('runAction(()=>relocateItem({name:"ref.pdf",path:"/ref.pdf",type:"file"},"/renamed.pdf"))');assert.equal(await second('state.currentFile.path'),'/renamed.pdf');
+ dialog.showMessageBox=async()=>({response:1});await js('runAction(()=>deleteItem({name:"renamed.pdf",path:"/renamed.pdf",type:"file"}))');assert.equal(await second('state.currentFile'),null);assert.equal(await js('state.currentFile.name'),'a.md');
+ // Media runs in the independent frame; swapping must not reload playback.
+ const videoBytes=await js('(async()=>{const c=document.createElement("canvas");c.width=320;c.height=180;const ctx=c.getContext("2d"),stream=c.captureStream(15),recorder=new MediaRecorder(stream,{mimeType:"video/webm;codecs=vp8"}),chunks=[];recorder.ondataavailable=e=>chunks.push(e.data);const stopped=new Promise(resolve=>recorder.onstop=resolve);let n=0;const timer=setInterval(()=>{ctx.fillStyle="#254c3b";ctx.fillRect(0,0,320,180);ctx.fillStyle="white";ctx.fillRect((n++*10)%220,60,50,50);},50);recorder.start();await new Promise(r=>setTimeout(r,1200));recorder.stop();await stopped;clearInterval(timer);stream.getTracks().forEach(t=>t.stop());return Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()));})()');
+ await fs.writeFile(path.join(root,'movie.webm'),Buffer.from(videoBytes));await second('$("mediaVideo").muted=true');await js('workspace.activate("secondary")');await open('movie.webm');
+ async function waitSecond(code){for(let i=0;i<300;i++){if(await second(code))return;await new Promise(r=>setTimeout(r,20));}throw Error('Wait failed: '+code+' / '+await second('$("status").textContent')+' / '+await js('document.fullscreenElement?.tagName')); }
+ await waitSecond('$("mediaVideo").readyState>=2');await second('$("mediaVideo").pause();$("mediaVideo").currentTime=0.4');await waitSecond('!$("mediaVideo").seeking');
+ const mediaURL=await second('$("mediaVideo").src');await js('workspace.swap()');assert.equal(await second('$("mediaVideo").src'),mediaURL);assert.ok(await second('$("mediaVideo").currentTime')>=0.39);
+ await second('$("videoFullscreen").click()');await waitSecond('document.fullscreenElement?.id==="videoStage"');await second('$("videoFullscreen").click()');await waitSecond('document.fullscreenElement===null');
+ const png=await js('(()=>{const c=document.createElement("canvas");c.width=100;c.height=100;return c.toDataURL().split(",")[1];})()');await fs.writeFile(path.join(root,'photo.png'),Buffer.from(png,'base64'));await open('photo.png');await waitSecond('$("mediaImage").naturalWidth===100');assert.equal(await second('$("mediaVideo").paused'),true);
+ await js('workspace.swap()');
+ // A failed save and declined discard must keep the pane and content.
+ await js('workspace.activate("secondary")');await open('word.docx');await second('(()=>{const p=document.querySelector(".word-paragraph");p.focus();const r=document.createRange();r.selectNodeContents(p);getSelection().removeAllRanges();getSelection().addRange(r);document.execCommand("insertText",false,"Unsaved Word");})()');
+ await fs.writeFile(path.join(root,'word.docx'),Buffer.from('conflicting remote version'));dialog.showMessageBox=async()=>({response:0});await js('workspace.activate("primary");workspace.collapse()');assert.equal(await js('workspace.inspect().split'),true);assert.equal(await second('wordEditor.dirty()'),true);
+ await js('runAction(doDisconnect)');assert.equal(await js('state.connected'),true,'disconnect canceled for other dirty pane');
+ assert.equal(await js('window.dispatchEvent(new Event("beforeunload",{cancelable:true}))'),false);await waitSecond('!state.busy');assert.equal(await second('wordEditor.dirty()'),true,'cancelled window close retains unsaved Word');
+ await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await fs.writeFile(path.join(__dirname,'../.electron-cache/workspace-dual.png'),(await win.webContents.capturePage()).toPNG());
+ console.log('Workspace passed: default single, optional left/right split, independent Markdown/Word/PDF, preserved swap/zoom, real divider drag, active routing, safe collapse, duplicate prevention, rename/delete propagation video playback/fullscreen and image viewing, and canceled dirty disconnect/window close');
+ clearTimeout(timeout);await server.close();app.exit(0);
+})().catch(async e=>{console.error(e);clearTimeout(timeout);if(server)await server.close();app.exit(1);});

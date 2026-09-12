@@ -1,0 +1,48 @@
+'use strict';
+const {app,BrowserWindow,ipcMain}=require('electron');
+const path=require('node:path'),os=require('node:os'),fs=require('node:fs/promises'),assert=require('node:assert/strict');
+const {PDFDocument}=require('pdf-lib');
+const annotations=require('../electron/pdf-annotations');
+app.setPath('userData',path.join(os.tmpdir(),'pdf-scroll-'+process.pid));
+ipcMain.handle('app:load-connection',()=>({ok:true,data:null}));
+ipcMain.handle('app:inspect-pdf-annotations',async(_e,bytes)=>({ok:true,data:await annotations.inspectAnnotations(bytes)}));
+ipcMain.handle('app:preview-pdf-annotations',async(_e,{bytes,removed})=>({ok:true,data:new Uint8Array(await annotations.annotatePDF(bytes,[],[],removed))}));
+let saved;
+ipcMain.handle('app:save-annotated-pdf',async(_e,payload)=>{saved=await annotations.annotatePDF(payload.bytes,[],payload.annotations,payload.removed);return {ok:true,data:new Uint8Array(saved)};});
+const timeout=setTimeout(()=>{console.error('PDF scroll timeout');app.exit(1);},45000);
+app.whenReady().then(async()=>{
+ const pdf=await PDFDocument.create();for(let n=1;n<=8;n++){const p=pdf.addPage(n%2?[400,600]:[500,650]);p.drawText('Selectable text on page '+n,{x:30,y:p.getHeight()-60,size:18});}
+ const bytes=Array.from(await pdf.save());
+ const win=new BrowserWindow({show:false,width:1360,height:860,webPreferences:{preload:path.join(__dirname,'../electron/preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:false}});
+ win.webContents.setBackgroundThrottling(false);await win.loadFile(path.join(__dirname,'../renderer/index.html'));const js=code=>win.webContents.executeJavaScript(code,true);
+ await js('state.currentFile={path:"/scroll.pdf",name:"scroll.pdf",kind:"pdf"};applyViewMode();window.pdfAnnotations.load('+JSON.stringify(bytes)+');runAction(()=>window.pdfAnnotations.open())');
+ const idle=async()=>{await new Promise(r=>setTimeout(r,250));for(let i=0;i<300&&await js('state.busy');i++)await new Promise(r=>setTimeout(r,20));assert.equal(await js('state.busy'),false);};
+ assert.equal(await js('document.querySelectorAll(".pdf-page-wrap").length'),8);
+ assert.ok(await js('document.querySelectorAll(".pdf-page-wrap")[1].getBoundingClientRect().top > document.querySelectorAll(".pdf-page-wrap")[0].getBoundingClientRect().bottom'));
+ await js('(()=>{const s=document.querySelector(".pdf-canvas-scroll"),p=document.querySelectorAll(".pdf-page-wrap")[1];s.scrollTop+=p.getBoundingClientRect().top-s.getBoundingClientRect().top-90;})()');await idle();
+ for(let i=0;i<200 && await js('$("pdfPageJump").value')!=='2';i++)await new Promise(r=>setTimeout(r,30));await idle();assert.equal(await js('$("pdfPageJump").value'),'2');assert.match(await js('$("pdfTextLayer").textContent'),/page 2/);
+ await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');const boundary=await win.webContents.capturePage();await fs.writeFile(path.join(__dirname,'../.electron-cache/pdf-continuous.png'),boundary.toPNG());
+ // Native wheel input moves the document vertically without changing zoom.
+ const position=await js('(()=>{const s=document.querySelector(".pdf-canvas-scroll"),r=s.getBoundingClientRect();return {x:r.left+100,y:r.top+200,top:s.scrollTop};})()');
+ win.webContents.sendInputEvent({type:'mouseWheel',x:Math.round(position.x),y:Math.round(position.y),deltaY:-280,deltaX:0});await idle();
+ assert.ok(await js('document.querySelector(".pdf-canvas-scroll").scrollTop')>position.top);assert.equal(await js('$("pdfZoomFit").textContent'),'适宽');
+ await js('(()=>{const s=$("pdfTextLayer").querySelector("span"),r=document.createRange();r.selectNodeContents(s);const selection=getSelection();selection.removeAllRanges();selection.addRange(r);$("pdfTextHighlight").click();})()');
+ assert.equal(await js('window.pdfAnnotations.dirty()'),true);
+ await js('$("pdfPageJump").value=8;$("pdfPageJump").dispatchEvent(new Event("change"))');await idle();
+ assert.equal(await js('$("pdfPageJump").value'),'8');assert.equal(await js('$("pdfNext").disabled'),true);
+ assert.equal(await js('document.querySelector(".pdf-page-wrap .pdf-page-canvas").width'),0,'far pages release canvas memory');
+ await js('$("pdfPageJump").value=2;$("pdfPageJump").dispatchEvent(new Event("change"))');await idle();
+ assert.equal(await js('$("pdfPageJump").value'),'2');
+ assert.equal(await js('(()=>{const c=$("pdfOverlayCanvas"),a=c.getContext("2d").getImageData(0,0,c.width,c.height).data;for(let i=3;i<a.length;i+=4)if(a[i])return true;return false;})()'),true,'annotations repaint after page eviction');
+ await js('runAction(()=>window.pdfAnnotations.save())');assert.equal(await js('window.pdfAnnotations.dirty()'),false);
+ const marks=await annotations.inspectAnnotations(saved);assert.equal(marks.length,1);assert.equal(marks[0].page,2);
+ await js('$("pdfNext").click()');await idle();assert.equal(await js('$("pdfPageJump").value'),'3');
+ await js('$("pdfPrevious").click()');await idle();assert.equal(await js('$("pdfPageJump").value'),'2');
+ await js('$("pdfZoomIn").click()');await idle();assert.equal(await js('$("pdfPageJump").value'),'2');assert.equal(await js('$("pdfZoomFit").textContent'),'105%');
+ await js('window.pdfAnnotations.load('+JSON.stringify(Array.from(saved))+');runAction(()=>window.pdfAnnotations.open())');
+ await js('$("pdfClearAnnotations").click()');await idle();assert.equal(await js('window.pdfAnnotations.dirty()'),true);
+ await js('$("pdfUndo").click()');await idle();assert.equal(await js('window.pdfAnnotations.dirty()'),false);
+ await js('window.pdfAnnotations.clear()');assert.equal(await js('document.querySelectorAll(".pdf-page-wrap").length'),1);
+ console.log('PDF continuous scroll passed: vertical layout, native wheel, synchronized page number, jump/buttons, mixed page sizes, lazy canvas eviction, annotation restoration/save on page 2 and zoom anchor');
+ clearTimeout(timeout);app.exit(0);
+}).catch(e=>{console.error(e);clearTimeout(timeout);app.exit(1);});

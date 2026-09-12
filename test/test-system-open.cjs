@@ -1,0 +1,36 @@
+require('../electron/media-protocol');
+'use strict';
+const {app,shell}=require('electron');
+const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+app.setPath('userData',path.join(os.tmpdir(),'system-open-ui-'+process.pid));
+let server;const timeout=setTimeout(()=>app.exit(1),30000);
+(async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'system-open-test-'));
+ const bytes=Buffer.from([0,255,1,3,99]);
+ await fs.writeFile(path.join(root,'报告.xlsx'),bytes);
+ await fs.writeFile(path.join(root,'old.doc'),bytes);
+ await fs.writeFile(path.join(root,'note.md'),'# hello');
+ server=await(await import('./mock-webdav.mjs')).startWebDAVServer(root);
+ const calls=[];let fail=false;
+ shell.openPath=async file=>{calls.push(file);assert.deepEqual(await fs.readFile(file),bytes);return fail?'No association':'';};
+ const ready=new Promise(resolve=>app.once('browser-window-created',(_event,win)=>{win.hide();win.webContents.once('did-finish-load',()=>resolve(win));}));require('../electron/main');const win=await ready;
+ const js=code=>win.webContents.executeJavaScript(code,true);
+ await js('connUrl.value='+JSON.stringify('http://127.0.0.1:'+server.port)+';runAction(doConnect)');
+ await js('runAction(()=>openFile({path:"/报告.xlsx",name:"报告.xlsx"}))');
+ assert.equal(calls.length,0,'selection must not launch');
+ assert.equal(await js('$("unsupportedPane").hidden'),false);
+ assert.equal(await js('$("markdownPanes").style.display'),'none');
+ assert.equal(await js('editorEl.readOnly && $("exportPdf").disabled && !isDirty()'),true);
+ async function click(){await js('$("openSystemFile").click()');for(let i=0;i<200&&await js('state.busy');i++)await new Promise(r=>setTimeout(r,20));assert.equal(await js('state.busy'),false);}
+ await click();assert.equal(calls.length,1);assert.equal(path.basename(calls[0]),'报告.xlsx');
+ assert.match(await js('$("systemOpenMessage").textContent'),/已交给/);
+ await click();assert.notEqual(calls[0],calls[1],'new copies preserve previous local edits');
+ fail=true;await click();assert.match(await js('$("systemOpenMessage").textContent'),/关联程序/);assert.equal(await js('$("openSystemFile").disabled'),false);
+ fail=false;await js('runAction(()=>openFile({path:"/missing.xlsx",name:"missing.xlsx"}))');const before=calls.length;await click();assert.equal(calls.length,before,'failed download must not launch');
+ await js('runAction(()=>openFile({path:"/old.doc",name:"old.doc"}))');assert.equal(await js('state.currentFile.kind'),'external');
+ await js('runAction(()=>openFile({path:"/note.md",name:"note.md"}))');assert.equal(await js('$("unsupportedPane").hidden'),true);assert.equal(await js('editorEl.value'),'# hello');
+ const opener=require('../electron/system-open').createSystemOpener(require('../electron/webdav'),shell,path.join(root,'downloads'));
+ await assert.rejects(()=>opener('C:\\Windows\\test.exe'),/无效/);
+ console.log('System open checks passed: fallback UI, raw download, system handler, unique copies, failed download/association, DOC fallback and Markdown return');
+ clearTimeout(timeout);await server.close();app.exit(0);
+})().catch(async e=>{console.error(e);clearTimeout(timeout);if(server)await server.close();app.exit(1);});

@@ -1,5 +1,7 @@
 // 最小 WebDAV mock 服务器，用于本地测试客户端层（不做认证、不做锁）
 import http from 'node:http';
+import { createHash } from 'node:crypto';
+const etag = bytes => '"' + createHash('sha256').update(bytes).digest('hex') + '"';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -21,7 +23,7 @@ function xmlEscape(s) {
   }[c]));
 }
 
-function statToXml(href, name, type, size, mtime) {
+function statToXml(href, name, type, size, mtime, hidden = false) {
   const coll = type === 'directory' ? '<D:collection/>' : '';
   const len = type === 'directory' ? '' : `<D:getcontentlength>${size}</D:getcontentlength>`;
   const ctype = type === 'directory' ? 'httpd/unix-directory' : 'text/markdown';
@@ -31,6 +33,7 @@ function statToXml(href, name, type, size, mtime) {
     <D:prop>
       <D:displayname>${xmlEscape(name)}</D:displayname>
       ${len}
+      <D:ishidden>${hidden ? 1 : 0}</D:ishidden>
       <D:getlastmodified>${new Date(mtime).toUTCString()}</D:getlastmodified>
       <D:getcontenttype>${ctype}</D:getcontenttype>
       <D:resourcetype>${coll}</D:resourcetype>
@@ -40,7 +43,7 @@ function statToXml(href, name, type, size, mtime) {
 </D:response>`;
 }
 
-function propfind(rootDir, urlPath, depth) {
+function propfind(rootDir, urlPath, depth, hiddenNames = []) {
   const abs = localPath(rootDir, urlPath);
   const hrefBase = urlPath.endsWith('/') ? urlPath : urlPath + '/';
   const parts = [];
@@ -52,41 +55,47 @@ function propfind(rootDir, urlPath, depth) {
       const childAbs = path.join(abs, entry.name);
       const childHref = hrefBase + encodeURIComponent(entry.name) + (entry.isDirectory() ? '/' : '');
       const st = fs.statSync(childAbs);
-      parts.push(statToXml(childHref, entry.name, entry.isDirectory() ? 'directory' : 'file', st.size, st.mtimeMs));
+      parts.push(statToXml(childHref, entry.name, entry.isDirectory() ? 'directory' : 'file', st.size, st.mtimeMs, hiddenNames.includes(entry.name)));
     }
   }
   return `<?xml version="1.0" encoding="utf-8"?>\n<D:multistatus xmlns:D="DAV:">${parts.join('')}</D:multistatus>`;
 }
 
-export async function startWebDAVServer(rootDir) {
+export async function startWebDAVServer(rootDir, { onRequest, hiddenNames = [] } = {}) {
   await fsp.mkdir(rootDir, { recursive: true });
 
   const handler = async (req, res) => {
     const urlPath = (req.url || '/').split('?')[0];
     const method = req.method;
+    onRequest?.(req);
     try {
       if (method === 'OPTIONS') {
         res.setHeader('DAV', '1,2');
-        res.setHeader('Allow', 'OPTIONS, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE');
+        res.setHeader('Allow', 'OPTIONS, PROPFIND, GET, PUT, DELETE, MKCOL, MOVE, COPY');
         res.statusCode = 200;
         res.end();
         return;
       }
       if (method === 'PROPFIND') {
         const depth = (req.headers.depth || '0').toString();
-        const xml = propfind(rootDir, urlPath, depth);
+        const xml = propfind(rootDir, urlPath, depth, hiddenNames);
         res.setHeader('Content-Type', 'application/xml; charset=utf-8');
         res.statusCode = 207;
         res.end(xml);
         return;
       }
-      if (method === 'GET') {
-        const abs = localPath(rootDir, urlPath);
-        const buf = await fsp.readFile(abs);
-        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-        res.statusCode = 200;
-        res.end(buf);
-        return;
+      if (method === 'GET' || method === 'HEAD') {
+        const abs = localPath(rootDir, urlPath),buf = await fsp.readFile(abs);
+        res.setHeader('Content-Type', 'application/octet-stream');res.setHeader('ETag',etag(buf));res.setHeader('Accept-Ranges','bytes');
+        let begin=0,end=buf.length-1;
+        if(req.headers.range){
+          const match=/^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+          if(!match||(!match[1]&&!match[2])){res.statusCode=416;res.end();return;}
+          if(!match[1])begin=Math.max(0,buf.length-Number(match[2]));else {begin=Number(match[1]);if(match[2])end=Math.min(end,Number(match[2]));}
+          if(begin>end||begin>=buf.length){res.statusCode=416;res.setHeader('Content-Range','bytes */'+buf.length);res.end();return;}
+          res.statusCode=206;res.setHeader('Content-Range','bytes '+begin+'-'+end+'/'+buf.length);
+        }else res.statusCode=200;
+        res.setHeader('Content-Length',Math.max(0,end-begin+1));res.end(method==='HEAD'?undefined:buf.subarray(begin,end+1));return;
       }
       if (method === 'PUT') {
         const abs = localPath(rootDir, urlPath);
@@ -100,6 +109,7 @@ export async function startWebDAVServer(rootDir) {
         req.on('data', (c) => chunks.push(c));
         req.on('end', async () => {
           try {
+            if (req.headers['if-match'] && (!fs.existsSync(abs) || req.headers['if-match'] !== etag(await fsp.readFile(abs)))) { res.statusCode = 412; res.end(); return; }
             await fsp.writeFile(abs, Buffer.concat(chunks));
             res.statusCode = 201;
             res.end();
@@ -124,7 +134,7 @@ export async function startWebDAVServer(rootDir) {
         res.end();
         return;
       }
-      if (method === 'MOVE') {
+      if (method === 'MOVE' || method === 'COPY') {
         const abs = localPath(rootDir, urlPath);
         const dest = (req.headers.destination || '');
         const destAbs = localPath(rootDir, new URL(dest).pathname);
@@ -134,7 +144,8 @@ export async function startWebDAVServer(rootDir) {
           return;
         }
         await fsp.mkdir(path.dirname(destAbs), { recursive: true });
-        await fsp.rename(abs, destAbs);
+        if (method === 'COPY') await fsp.copyFile(abs, destAbs, fs.constants.COPYFILE_EXCL);
+        else await fsp.rename(abs, destAbs);
         res.statusCode = 201;
         res.end();
         return;
