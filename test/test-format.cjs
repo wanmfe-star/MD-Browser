@@ -1,0 +1,31 @@
+const assert = require('node:assert/strict');
+const format = require('../renderer/format.js');
+function apply(text, start, end, kind) {
+  const edit = format(text, start, end, kind);
+  return { text: text.slice(0, edit.start) + edit.value + text.slice(edit.end), edit };
+}
+assert.equal(apply('你好', 0, 2, 'bold').text, '**你好**');
+assert.equal(apply('**你好**', 2, 4, 'bold').text, '你好');
+assert.equal(apply('', 0, 0, 'italic').text, '*斜体文字*');
+assert.equal(apply('a\nb\nc', 0, 4, 'ordered').text, '1. a\n2. b\nc');
+assert.equal(apply('## 标题', 3, 5, 'h1').text, '# 标题');
+assert.equal(apply('- a\n- b', 0, 7, 'task').text, '- [ ] a\n- [ ] b');
+assert.equal(apply('\nrest', 0, 0, 'h2').text, '## \nrest');
+assert.equal(apply('a\nb', 0, 3, 'quote').text, '> a\n> b');
+const link = apply('文档', 0, 2, 'link');
+assert.equal(link.text, '[文档](https://)');
+assert.equal(link.text.slice(link.edit.selectStart, link.edit.selectEnd), 'https://');
+assert.equal(apply('```js', 0, 5, 'block').text, '````\n```js\n````');
+console.log('Markdown formatting: 10 checks passed');
+assert.equal(apply('正文', 0, 2, 'color:#ff0000').text, '<span style="color:#ff0000">正文</span>');
+assert.match(apply('正文', 0, 2, 'font:kai').text, /font-family:Kaiti SC, KaiTi, serif/);
+assert.equal(apply('正文', 0, 2, 'indent').text, '　　正文');
+assert.equal(apply('　　正文', 0, 4, 'indent').text, '正文');
+assert.equal(apply('', 0, 0, 'indent').text, '　　');
+assert.equal(apply('# 标题\n\n正文', 0, 8, 'indent').text, '# 标题\n\n　　正文');
+assert.equal(format('正文', 0, 2, 'color:red;background:url(x)'), null);
+const oldStyle = '<span style="color:#ff0000;font-size:18px">正文</span>';
+const restyled = apply(oldStyle, 0, oldStyle.length, 'color:#000000').text;
+assert.equal(restyled.includes('color:#ff0000'), false);
+assert.equal(restyled.includes('font-size:18px'), true);
+console.log('Typography and indentation checks passed');

@@ -1,0 +1,7 @@
+node_modules/
+.pnpm-store/
+.pnpm-cache/
+.electron-cache/
+dist/
+*.log
+.DS_Store

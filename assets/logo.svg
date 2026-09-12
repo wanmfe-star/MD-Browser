@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="MD Browser">
+  <defs>
+    <linearGradient id="green" x1="180" y1="110" x2="840" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3d805b"/><stop offset="1" stop-color="#20513b"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="204" fill="url(#green)"/>
+  <path d="M319 240h268l133 133v363a48 48 0 0 1-48 48H319a48 48 0 0 1-48-48V288a48 48 0 0 1 48-48Z" fill="#102f22" opacity=".16" transform="translate(12 18)"/>
+  <path d="M319 240h268l133 133v363a48 48 0 0 1-48 48H319a48 48 0 0 1-48-48V288a48 48 0 0 1 48-48Z" fill="#f7faf1"/>
+  <path d="M587 240v91a42 42 0 0 0 42 42h91Z" fill="#b8d2b6"/>
+  <path d="M371 587V443l125 114 125-114v144" fill="none" stroke="#306b4b" stroke-width="43" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M373 677h246" stroke="#8aa98b" stroke-width="22" stroke-linecap="round"/>
+</svg>

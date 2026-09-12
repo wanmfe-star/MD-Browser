@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'self' blob:" />
+  <title>MD Browser</title>
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="titlebar">MD Browser</div>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand"><img class="brand-logo" src="../assets/logo.svg" alt="" /> MD Browser</div>
+      <button id="connectionSettings" class="connection-card" title="连接设置">
+        <span class="cloud-icon">☁</span><span class="connection-copy"><strong id="connectionName">远程文档</strong><span id="connectionState">未连接 · 点击设置</span></span><span class="settings-symbol">⚙</span>
+      </button>
+      <div class="sidebar-heading"><span>文件</span><div class="toolbar"><button id="importFile" class="icon-btn" title="导入 PDF 原文件，或将 Word / 文本转换为 Markdown" aria-label="导入文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11 M8 10l4 4 4-4 M4 15v5h16v-5"/></svg></button>
+        <button id="newFile" class="icon-btn" title="新建 Markdown 文件" aria-label="新建文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16 M4 12h16"/></svg></button>
+        <button id="newDir" class="icon-btn" title="新建文件夹" aria-label="新建文件夹"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5h6l2 2h10v13H3Z M12 10v7 M8.5 13.5h7"/></svg></button>
+        <button id="refresh" class="icon-btn" title="刷新" aria-label="刷新"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10a8 8 0 1 0 0 5 M20 4v6h-6"/></svg></button>
+      </div></div>
+      <div id="directoryLabel" class="directory-label">我的文档</div>
+      <ul class="filelist" id="filelist"></ul>
+      <div class="sidebar-footer"><span id="connectionDot" class="connection-dot"></span><span id="sidebarStatus">尚未连接 WebDAV</span></div>
+    </aside>
+    <main class="content">
+      <header class="document-header">
+        <div class="crumb" id="crumb"></div>
+        <div class="document-tools"><div class="document-title"><h1 id="docName">你的下一页，从这里开始</h1><button id="dirty" class="save-status" disabled></button></div>
+          <div class="actions"><div class="seg" id="viewMode" aria-label="视图模式"><button data-mode="edit">编辑</button><button data-mode="split" class="active">分屏</button><button data-mode="preview">预览</button></div>
+          <details id="moreMenu" class="more-menu"><summary aria-label="更多操作">···</summary><div class="menu"><button id="exportPdf" disabled>导出 PDF…</button><button id="renameBtn" disabled>重命名</button><button id="deleteBtn" class="danger" disabled>删除文档</button></div></details></div>
+        </div>
+      </header>
+      <div class="panes" id="markdownPanes">
+        <section class="pane editor-pane" id="editorPane"><div class="pane-heading" title="按住 Control 滚动鼠标滚轮可调整编辑字号">MARKDOWN <span>纯粹书写</span></div><div id="formatToolbar" class="format-toolbar" role="group" aria-label="Markdown 格式">
+<select id="textFont" title="设置选中文字的字体" aria-label="文字字体"><option value="">字体</option><option value="sans">黑体</option><option value="serif">宋体</option><option value="kai">楷体</option><option value="mono">等宽</option></select>
+<select id="textSize" title="设置选中文字字号（保存到文档）" aria-label="文字字号"><option value="">字号</option><option>12</option><option>14</option><option>16</option><option>18</option><option>20</option><option>24</option><option>28</option></select>
+<label class="text-color" title="设置选中文字颜色">A<input id="textColor" type="color" value="#347552" aria-label="文字颜色" /></label><button data-format="indent" title="首行缩进两个汉字，再次点击取消">首行缩进</button><span class="format-divider"></span>
+<button data-format="h1" title="一级标题" aria-label="一级标题">H1</button><button data-format="h2" title="二级标题" aria-label="二级标题">H2</button>
+<button data-format="bold" title="加粗（⌘/Ctrl+B）" aria-label="加粗"><b>B</b></button><button data-format="italic" title="斜体（⌘/Ctrl+I）" aria-label="斜体"><i>I</i></button><button data-format="strike" title="删除线" aria-label="删除线"><s>S</s></button>
+<span class="format-divider"></span><button data-format="link" title="链接（⌘/Ctrl+K）" aria-label="插入链接">↗</button><button data-format="image" title="图片" aria-label="插入图片">▧</button><button data-format="code" title="行内代码" aria-label="行内代码">&lt;/&gt;</button><button data-format="block" title="代码块" aria-label="代码块">{ }</button>
+<span class="format-divider"></span><button data-format="bullet" title="无序列表" aria-label="无序列表">• ≡</button><button data-format="ordered" title="有序列表" aria-label="有序列表">1.</button><button data-format="task" title="待办列表" aria-label="待办列表">☑</button><button data-format="quote" title="引用" aria-label="引用">❞</button><button data-format="rule" title="分隔线" aria-label="分隔线">—</button>
+</div><div class="editor-surface"><div id="lineNumbers" class="line-numbers" aria-hidden="true">1</div><textarea id="editor" placeholder="连接远程存储，选择或新建一篇文档…" spellcheck="false" wrap="off" aria-label="Markdown 编辑器"></textarea></div></section>
+        <section class="pane preview-pane" id="previewPane"><div class="pane-heading" title="按住 Control 滚动鼠标滚轮可调整预览字号">预览 <div class="preview-font-controls" role="group" aria-label="预览字号"><button id="previewFontDown" title="缩小预览字号" aria-label="缩小预览字号">A−</button><button id="previewFontReset" title="恢复默认字号（14px）" aria-label="恢复默认预览字号">14px</button><button id="previewFontUp" title="放大预览字号" aria-label="放大预览字号">A＋</button></div></div><div class="preview-scroll"><article class="markdown-body" id="preview"><div class="placeholder"><img class="welcome-logo" src="../assets/logo.svg" alt="MD Browser" /><h2>给思考一点空间</h2><p>连接你的 WebDAV 存储，<br>让文档随手可读，让灵感随时落笔。</p><button id="welcomeConnect" class="btn primary">连接远程存储 <span>↗</span></button><small>支持坚果云、Nextcloud 与其他 WebDAV 服务</small></div></article></div></section>
+      </div>
+      <section id="pdfPane" class="pdf-pane" hidden><iframe id="pdfViewer" title="PDF 文档预览"></iframe><div id="pdfAnnotationPanel" hidden>
+<div class="pdf-canvas-scroll"><div id="pdfCanvasWrap"><canvas id="pdfPageCanvas"></canvas><canvas id="pdfOverlayCanvas"></canvas><div id="pdfTextLayer" class="textLayer"></div></div></div>
+</div><div class="pdf-reading-bar"><span id="pdfAnnotationStatus" role="status"></span><div class="pdf-pagination"><button id="pdfPrevious" title="上一页" aria-label="上一页">‹</button><input id="pdfPageJump" type="number" min="1" value="1" aria-label="跳转页码"><span id="pdfPageNumber"></span><button id="pdfNext" title="下一页" aria-label="下一页">›</button></div>
+<details id="pdfReadingMenu"><summary aria-label="阅读选项" title="阅读选项">···</summary><div class="pdf-reading-menu"><button id="pdfSaveAnnotations">保存 PDF <small>⌘S</small></button><button id="pdfUndo">撤销标注 <small>⌘Z</small></button><button id="pdfClearAnnotations">清除全部标注</button><hr><div class="pdf-zoom-row"><button id="pdfZoomOut" aria-label="缩小">−</button><button id="pdfZoomFit">适宽</button><button id="pdfZoomIn" aria-label="放大">＋</button></div><hr><button id="pdfAnnotate">原版阅读器</button></div></details></div></section>
+      <footer class="statusbar"><span id="status" class="status" role="status">准备就绪</span><div><span id="wordCount">0 字</span><span id="textEncoding">UTF-8</span><span id="cursorPosition">Ln 1, Col 1</span><span id="saveHint">自动保存 · ⌘S 立即保存</span></div></footer>
+    </main>
+  </div>
+  <dialog id="connectionDialog"><form id="connectionForm"><div class="dialog-heading"><h2>连接远程存储</h2><button type="button" id="closeConnection" class="icon-btn" aria-label="关闭">×</button></div><p class="dialog-description">让你的 Markdown 文档，随处可读可写。</p><label for="connUrl">WebDAV 地址</label><input id="connUrl" type="url" placeholder="https://dav.jianguoyun.com/dav/" required /><label for="connUser">账号 / 邮箱</label><input id="connUser" type="text" autocomplete="username" placeholder="你的账号" /><label for="connPass">应用密码</label><input id="connPass" type="password" autocomplete="off" placeholder="输入 WebDAV 应用密码" /><p class="field-note">连接成功后，密码会加密保存在本机，下次打开自动连接。</p><button id="forgetPassword" class="forget-password" type="button">清除已保存密码</button><p id="connectionMessage" role="status"></p><div class="dialog-actions"><button id="discBtn" class="btn" type="button" disabled>断开连接</button><button id="connBtn" class="btn primary" type="submit">连接</button></div></form></dialog>
+  <dialog id="importWarnings"><form method="dialog"><h2>文档已导入</h2><p id="importWarningsText" class="import-warnings"></p><div class="dialog-actions"><button class="btn primary">知道了</button></div></form></dialog>
+  <dialog id="moveDialog"><div class="dialog-heading"><h2>移动到</h2><button id="moveCancel" class="icon-btn" aria-label="取消移动">×</button></div><p id="moveItemName" class="dialog-description"></p><div class="move-navigation"><button id="moveUp" class="btn">返回上级</button><span id="movePath">/</span></div><div id="moveFolders" class="move-folders"></div><p id="moveMessage" role="status"></p><div class="dialog-actions"><button id="moveConfirm" class="btn primary">移动到此目录</button></div></dialog>
+  <dialog id="nameDialog"><form id="nameForm" method="dialog"><label id="nameTitle" for="nameInput"></label><input id="nameInput" type="text" autocomplete="off" required /><div class="dialog-actions"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" value="ok" type="submit">确定</button></div></form></dialog>
+<div id="pdfSelectionToolbar" class="pdf-selection-toolbar" role="toolbar" aria-label="选中文字操作" hidden><button id="pdfTextCopy">复制</button><span></span><button id="pdfTextHighlight">高亮</button><button id="pdfTextUnderline">下划线</button><button id="pdfDeleteAnnotation" hidden>删除标注</button></div>
+
+  <script src="../node_modules/marked/marked.min.js"></script><script src="../node_modules/dompurify/dist/purify.min.js"></script><script src="./document-style.js"></script><script src="./format.js"></script><script src="./pdf-annotations.js"></script><script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "name": "md-browser",
+  "version": "0.1.0",
+  "description": "桌面 Markdown 浏览/编辑应用，连接 WebDAV 远程存储（坚果云等）",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "test:webdav": "node test/test-webdav.mjs",
+    "test:renderer": "node test/test-renderer.mjs",
+    "test": "npm run test:webdav && npm run test:renderer && npm run test:format && npm run test:credentials && npm run test:import",
+    "test:format": "node test/test-format.cjs",
+    "test:credentials": "node test/test-credentials.cjs",
+    "test:import": "node test/test-import.cjs",
+    "test:pdf": "electron test/test-pdf.cjs",
+    "test:pdf-annotations": "node test/test-pdf-annotations.cjs"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dompurify": "^3.2.3",
+    "iconv-lite": "^0.7.3",
+    "mammoth": "^1.12.2",
+    "marked": "^12.0.2",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "4.10.38",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "webdav": "^5.7.1"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}
