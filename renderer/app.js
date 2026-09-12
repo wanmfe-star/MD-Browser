@@ -126,6 +126,7 @@ async function doConnect() {
   setStatus('连接中…');
   const res = await window.mdAPI.connect(cfg);
   if (res.ok) {
+    window.readingProgress?.leave();
     state.connected = true;
     state.connectionKey = JSON.stringify([new URL(cfg.url).href.replace(/\/+$/, ''), cfg.username]);
     try { localStorage.setItem('md-browser.connection', JSON.stringify({ url: cfg.url, username: cfg.username })); } catch {}
@@ -152,6 +153,7 @@ async function doDisconnect() {
   if (!(await canDiscard())) return;
   const res = await window.mdAPI.disconnect();
   if (!res.ok) { setStatus('断开失败：' + res.error, 'error'); return; }
+  window.readingProgress?.leave();
   clearTimeout(autoSaveTimer);
   state.connected = false;
   state.currentDir = '/';
@@ -283,6 +285,7 @@ async function openFile(item, discardApproved = false, local = false) {
   updateEditorUI(true);
   setStatus(content !== res.data ? '已恢复本地草稿，稍后自动保存到远程' : '已打开：' + item.name);
   updateMetrics(); renderList();
+  await window.readingProgress?.restore();
   if (isDirty()) { persistDraft(); scheduleSave(); }
 }
 
@@ -309,6 +312,8 @@ $('openSystemFile').addEventListener('click', () => runAction(async () => {
 }));
 
 function releasePDF() {
+  window.readingProgress?.leave();
+  window.browserPane?.hide();
   window.mediaViewer?.clear();
   window.wordEditor?.clear();
   window.pdfAnnotations?.clear();
@@ -332,6 +337,7 @@ async function openMedia(item, existingQueue) {
   $('wordCount').textContent = fmtSize(item.size);
   $('cursorPosition').textContent = { audio:'音乐播放', video:'视频播放', image:'图片查看' }[type.kind];
   setStatus('已打开：' + item.name);
+  await window.readingProgress?.restore();
 }
 
 async function openWord(item) {
@@ -345,6 +351,7 @@ async function openWord(item) {
   window.wordEditor.load(result.data);
   applyViewMode(); updateDirty(); renderList();
   $('cursorPosition').textContent = 'Word · 单页编辑';
+  await window.readingProgress?.restore();
   setStatus('已打开 Word：' + item.name, 'ok');
 }
 
@@ -367,6 +374,7 @@ async function openPDF(item) {
   $('cursorPosition').textContent = 'PDF · 阅读与标注';
   try { await window.pdfAnnotations?.open(); }
   catch (err) { setStatus('标注阅读器加载失败，已保留原版预览：' + err.message, 'error'); return; }
+  await window.readingProgress?.restore();
   setStatus('已打开 PDF：' + item.name, 'ok');
 }
 

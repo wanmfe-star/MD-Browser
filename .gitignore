@@ -15,3 +15,11 @@ user-data/
 userData/
 Local Storage/
 Session Storage/
+
+# Embedded browser profiles, login cookies and caches
+Partitions/
+Cookies
+Cookies-journal
+Cache/
+Code Cache/
+GPUCache/

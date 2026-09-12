@@ -26,7 +26,8 @@
     "test:word-text": "electron test/test-word-text.cjs",
     "test:workspace": "electron test/test-workspace.cjs",
     "test:editor-wrap": "electron test/test-editor-wrap.cjs",
-    "dist:win": "node scripts/build-win.cjs"
+    "dist:win": "node scripts/build-win.cjs",
+    "test:browser-progress": "electron test/test-browser-progress.cjs"
   },
   "license": "MIT",
   "dependencies": {

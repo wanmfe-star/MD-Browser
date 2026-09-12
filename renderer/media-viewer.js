@@ -79,5 +79,5 @@
     load(next,result.data,playlist.slice());
   }
   el('mediaRetry').onclick=()=>{if(item&&!state.busy)runAction(()=>openMedia(item,playlist.slice()));};
-  window.mediaViewer={load,clear,relocated};
+  window.mediaViewer={load,clear,relocated,position:()=>({zoom,rotation}),restorePosition(value){zoom=window.viewZoom.clamp(value.zoom||1,0.05,8);rotation=Number(value.rotation)||0;imageLayout();}};
 })();

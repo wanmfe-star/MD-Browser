@@ -185,3 +185,36 @@ h1#docName{font-size:19px}
 .empty-pane-actions button:disabled{opacity:.5;cursor:default}
 
 .sidebar-footer #connectionSettings{margin-left:auto;flex-shrink:0;font-size:18px}
+
+.content.show-browser>:not(.browser-pane){display:none!important}
+.browser-pane{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--bg)}
+.browser-pane[hidden]{display:none}
+.browser-toolbar{display:flex;gap:5px;align-items:center;padding:10px;border-bottom:1px solid var(--border)}
+.browser-toolbar button{border:0;border-radius:5px;padding:6px 8px;background:var(--soft);color:var(--text);flex-shrink:0}
+.browser-address{flex:1;min-width:60px;border:1px solid var(--border);border-radius:6px;padding:7px 9px;background:white;color:var(--text)}
+.browser-message{font-size:12px;color:var(--muted);padding:6px 12px;overflow-wrap:anywhere}
+.browser-message:empty{display:none}
+.browser-stage{flex:1;min-height:0;display:flex}
+.browser-stage webview{display:flex;flex:1;min-width:0;height:100%;background:white}
+.empty-pane-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.selection-copy{position:fixed;z-index:1000;border:1px solid var(--border);border-radius:6px;padding:7px 14px;background:var(--bg);color:var(--accent);box-shadow:0 3px 12px #0002}
+.selection-copy[hidden]{display:none}
+
+.browser-guest-overlay{position:fixed;z-index:20;display:flex;background:white}
+.browser-guest-overlay[hidden]{display:none}
+.browser-guest-overlay webview{display:flex;flex:1;width:100%;height:100%}
+
+.empty-pane-actions button{border:1px solid var(--border);background:var(--bg);color:var(--accent)}
+.empty-pane-actions button:hover{background:var(--soft)}
+
+.browser-bookmarks{display:flex;gap:6px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+.browser-bookmarks button{border:0;border-radius:5px;background:transparent;color:var(--accent);padding:5px 8px;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;font-size:12px}
+.browser-bookmarks button:hover{background:var(--soft)}
+.bookmark-dialog{width:min(540px,90vw);max-height:85vh;overflow:auto}
+.bookmark-dialog label{display:block;margin:10px 0}
+.bookmark-dialog input{display:block;width:100%;margin-top:6px}
+.bookmark-error{color:var(--danger);font-size:12px}
+.bookmark-list{margin-top:18px;max-height:35vh;overflow:auto}
+.bookmark-row{display:flex;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--border)}
+.bookmark-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bookmark-row button{padding:5px 9px}

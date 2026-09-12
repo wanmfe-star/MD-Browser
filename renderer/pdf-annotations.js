@@ -285,7 +285,7 @@
       status('已保存到原文件');
     }finally{loading=false;controls();}
   }
-  window.pdfAnnotations={dirty,save,open:start,load(data){this.clear();bytes=new Uint8Array(data);expectedBytes=bytes.slice();},clear(){
+  window.pdfAnnotations={position(){const entry=pages[page-1];return {page,zoom,offset:entry?(scroll.getBoundingClientRect().top-entry.wrap.getBoundingClientRect().top)/Math.max(1,entry.wrap.offsetHeight):0};},async restorePosition(value){if(!documentPDF)return;await changeZoom(Number(value.zoom)||1);await goToPage(Number(value.page)||1);const entry=pages[page-1];if(entry)scroll.scrollTop+=entry.wrap.getBoundingClientRect().top-scroll.getBoundingClientRect().top+(Number(value.offset)||0)*entry.wrap.offsetHeight;queueScrollRender();},dirty,save,open:start,load(data){this.clear();bytes=new Uint8Array(data);expectedBytes=bytes.slice();},clear(){
     clearTimeout(scrollTimer);scroll.scrollTop=0;pages=[];layoutKey='';firstPage.viewport=null;firstPage.renderedKey='';scroll.replaceChildren(firstPage.wrap);firstPage.wrap.style.height='';bindPage(firstPage);
     hideSelectionToolbar();selecting=false;history=[];originalAnnotations=[];sourceRemoved='[]';expectedBytes=null;generation++;documentPDF?.destroy();documentPDF=null;bytes=null;actions=[];pending=null;active=false;savedActions='[]';page=1;zoom=1;el('pdfZoomFit').textContent='适宽';pageSizes.clear();viewportNow=null;textLayer.replaceChildren();
     el('pdfAnnotationPanel').hidden=true;el('pdfViewer').style.display='';el('pdfAnnotate').textContent='原版阅读器';

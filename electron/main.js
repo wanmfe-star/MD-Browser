@@ -44,6 +44,16 @@ if (process.env.MD_BROWSER_SMOKE) {
 let mainWindow = null;
 const credentials = require('./credentials').createCredentialStore(app.getPath('userData'), safeStorage);
 
+const configuredBrowserSessions = new WeakSet();
+let browserSession = null, browserStorageFlushed = false;
+app.on('before-quit', event => {
+  if (!browserSession || browserStorageFlushed) return;
+  event.preventDefault();
+  browserStorageFlushed = true;
+  browserSession.flushStorageData();
+  browserSession.cookies.flushStore().catch(() => {}).finally(() => app.quit());
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1360,
@@ -51,6 +61,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 600,
     title: 'MD Browser',
+    autoHideMenuBar: true,
     icon: path.join(__dirname, '../assets/icon.png'),
     backgroundColor: '#fdfdfb',
     titleBarStyle: 'hiddenInset',
@@ -60,9 +71,28 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
       plugins: true,
+      webviewTag: true,
     },
   });
 
+  // Remote pages never receive the application's preload or NAS bridge.
+  mainWindow.webContents.on('will-attach-webview', (event, preferences, params) => {
+    if (!/^https?:\/\//i.test(params.src) || params.partition !== 'persist:md-browser-web') { event.preventDefault(); return; }
+    delete preferences.preload;
+    Object.assign(preferences, { nodeIntegration: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true, webSecurity: true, webviewTag: false });
+  });
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    const allowed = url => { try { return ['http:','https:'].includes(new URL(url).protocol); } catch { return false; } };
+    for (const type of ['will-navigate','will-redirect']) guest.on(type, (event, url) => { if (!allowed(url)) event.preventDefault(); });
+    guest.setWindowOpenHandler(({url}) => { if (allowed(url)) guest.loadURL(url).catch(()=>{}); return {action:'deny'}; });
+    browserSession = guest.session;
+    if (configuredBrowserSessions.has(guest.session)) return;
+    configuredBrowserSessions.add(guest.session);
+    guest.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    guest.session.setPermissionCheckHandler(() => false);
+    guest.session.on('will-download', event => event.preventDefault());
+  });
+  mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   // 冒烟测试：MD_BROWSER_SMOKE=1 时加载完成后自检并退出
@@ -141,6 +171,7 @@ app.on('window-all-closed', () => {
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_event, ...args) => {
     try {
+      if (_event.sender !== mainWindow?.webContents) throw new Error('不允许的调用来源');
       const data = await fn(...args);
       return { ok: true, data };
     } catch (err) {

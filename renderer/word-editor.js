@@ -270,5 +270,5 @@
     el('wordAddParagraph').disabled=value;el('wordSave').disabled=value||!dirty();
     el('wordUndo').disabled=value||!undoStack.length;el('wordRedo').disabled=value||!redoStack.length;syncToolbar();
   }
-  window.wordEditor={load,save,dirty,setLocked,clear(){textSelection=[];bytes=null;blocks=[];originals.clear();saved='';undoStack=[];redoStack=[];selectedId=null;page.replaceChildren();}};
+  window.wordEditor={getZoom:()=>zoom,setZoom,load,save,dirty,setLocked,clear(){textSelection=[];bytes=null;blocks=[];originals.clear();saved='';undoStack=[];redoStack=[];selectedId=null;page.replaceChildren();}};
 })();

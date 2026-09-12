@@ -10,7 +10,7 @@
     divider.hidden=!split;divider.style.order=1;divider.setAttribute('aria-valuenow',Math.round(ratio*100));divider.setAttribute('aria-valuemin','20');divider.setAttribute('aria-valuemax','80');
     el('splitMenu').hidden=split;el('swapPanes').hidden=!split;el('collapsePanes').hidden=!split;
     el('workspaceHint').textContent=split?(order[0]===active?'左栏':'右栏')+' · 当前操作栏':'单栏';
-    host.classList.toggle('is-split',split);primary.classList.toggle('inactive-pane',split&&active!=='primary');
+    host.classList.toggle('is-split',split);primary.classList.toggle('inactive-pane',split&&active!=='primary');clients.secondary?.layoutBrowser();
   }
   async function ensureSecondary(){
     if(ready)return ready;
@@ -42,6 +42,7 @@
   splitMenu.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeSplitMenu();trigger.focus();}if(['ArrowLeft','ArrowRight'].includes(event.key)&&event.target.closest('.split-choices')){event.preventDefault();el(event.key==='ArrowLeft'?'splitKeepLeft':'splitKeepRight').focus();}});
   document.addEventListener('pointerdown',event=>{if(!splitMenu.contains(event.target))closeSplitMenu();});
   el('splitKeepLeft').onclick=()=>{closeSplitMenu();action(()=>enable('left'));};el('splitKeepRight').onclick=()=>{el('splitMenu').open=false;action(()=>enable('right'));};
+  el('openBrowser').onclick=()=>clients[active].openBrowser();
   el('swapPanes').onclick=()=>{order.reverse();layout();};el('collapsePanes').onclick=()=>action(collapse);
   divider.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();divider.setPointerCapture(event.pointerId);host.classList.add('resizing');});
   divider.addEventListener('pointermove',event=>{if(!divider.hasPointerCapture(event.pointerId))return;const rect=host.getBoundingClientRect();ratio=Math.max(0.2,Math.min(0.8,(event.clientX-rect.left)/rect.width));layout();});
