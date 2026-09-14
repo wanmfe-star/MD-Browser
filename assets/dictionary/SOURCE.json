@@ -1,0 +1,14 @@
+{
+  "project": "mapull/chinese-dictionary",
+  "url": "https://github.com/mapull/chinese-dictionary",
+  "license": "MIT",
+  "retrieved": "2026-09-13",
+  "entries": 21056,
+  "withDefinitions": 16221,
+  "files": {
+    "char_base.json": "9ffe34868cb4678ace152c2f9ec986bdef78c3d916c368155f6bc3d9655e9b3d",
+    "char_detail.json": "055c8cd9375d2dcdb7b6a2f55f990315834d6af6b0c2c84d9b75190e991d8c7b"
+  },
+  "changes": "Merged single-character readings and basic metadata; retained definition content grouped by pronunciation; omitted examples and word lists.",
+  "notice": "Upstream states that some original data sources are uncertain and data accuracy has not been strictly verified."
+}

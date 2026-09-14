@@ -1,0 +1,15 @@
+{
+  "project": "mapull/chinese-dictionary",
+  "url": "https://github.com/mapull/chinese-dictionary",
+  "license": "MIT",
+  "retrieved": "2026-09-13",
+  "entries": 320018,
+  "idioms": 49638,
+  "withDefinitions": 303920,
+  "files": {
+    "word.json": "a85d96a3c6e55e831406b534b533ab4641176fdd80ac7dceaeb5af9bed333c58",
+    "idiom.json": "54f0cefb5b7d3ea9a3b357bcd7d53877f5a4c11d1c68ff1790f831800c000ace"
+  },
+  "changes": "Merged Chinese words and idioms by normalized term; retained source readings, definitions, origins, examples, usage, synonyms and antonyms where present. Split into 256 buckets by first code point modulo 256. Non-Chinese terms and terms exceeding 32 characters excluded.",
+  "notice": "Upstream states that some original data sources are uncertain and data accuracy has not been strictly verified."
+}

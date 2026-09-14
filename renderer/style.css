@@ -218,3 +218,32 @@ h1#docName{font-size:19px}
 .bookmark-row{display:flex;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--border)}
 .bookmark-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bookmark-row button{padding:5px 9px}
+.selection-actions{display:flex;gap:3px;padding:5px;border-radius:9px}.selection-actions button{border:0;background:none;color:var(--text);padding:7px 10px;border-radius:5px;font-size:12px}.selection-actions button:hover{background:var(--soft);color:var(--accent)}.dictionary-card{position:fixed;z-index:1100;width:360px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);display:flex;flex-direction:column;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px #24351d26;overflow:hidden}.dictionary-card[hidden]{display:none}.dictionary-card header{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 20px 10px}.dictionary-character{font-family:"Songti SC",serif;font-size:34px;line-height:1.2}.dictionary-pinyin{color:var(--accent);font-size:17px;margin-top:8px}.dictionary-close{border:0;background:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px}.dictionary-meta{padding:0 20px 12px;font-size:12px;color:var(--muted)}.dictionary-definitions{overflow:auto;padding:0 20px 16px;font-size:14px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere;min-height:0}.dictionary-definitions p{margin:0 0 12px}.dictionary-card footer{padding:10px 20px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);flex-shrink:0}
+.dictionary-card{max-height:min(480px,calc(100vh - 16px))}.dictionary-card header,.dictionary-meta{flex-shrink:0}
+
+.dictionary-card header>div{min-width:0}.dictionary-phrase .dictionary-character{font-size:24px;overflow-wrap:anywhere}.dictionary-pinyin{overflow-wrap:anywhere}.dictionary-definitions strong{font-size:12px;color:var(--muted)}
+
+/* Give image previews a compact header and one shared control row. */
+.image-toolbar[hidden]{display:none}
+.image-view .document-header{padding:8px 20px}
+.image-view .crumb{height:16px;margin-bottom:4px;white-space:nowrap;overflow:hidden}
+.image-view .crumb button{flex-shrink:0}
+.image-view h1#docName{font-size:16px;letter-spacing:0}
+.image-view .document-tools{flex-wrap:nowrap;min-height:26px}
+.image-view .media-pane{position:relative;isolation:isolate}
+.image-view .media-toolbar{position:absolute;inset:0;z-index:2;display:flex;flex-wrap:wrap;align-items:flex-end;align-content:flex-end;justify-content:flex-end;gap:6px;padding:12px 16px;border:0;background:transparent;pointer-events:none;box-sizing:border-box}
+.image-view .media-toolbar>*{pointer-events:auto}
+.image-view #mediaLabel,.image-view .media-toolbar-spacer{display:none}
+.image-view #mediaPosition{align-self:auto;line-height:28px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text);text-shadow:0 0 3px white,0 0 6px white}
+.image-view .media-toolbar button{padding:4px 7px;height:28px;white-space:nowrap;flex-shrink:0;font-size:12px;border:0;background:transparent;color:var(--text);text-shadow:0 0 3px white,0 0 6px white}
+.image-view .media-toolbar button:hover{color:var(--accent);background:#ffffff35}
+.image-view .media-toolbar button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.image-view #mediaPrevious,.image-view #mediaNext{position:absolute;top:50%;transform:translateY(-50%);font-size:42px;line-height:44px;width:44px;height:56px;padding:0}
+.image-view #mediaPrevious{left:12px}
+.image-view #mediaNext{right:12px}
+.image-view #mediaPrevious:disabled,.image-view #mediaNext:disabled{visibility:hidden}
+.image-view .image-toolbar{padding:0;margin:0;border:0;background:transparent;gap:3px;flex-shrink:0}
+.image-view #imageScale{color:var(--text);text-shadow:0 0 3px white,0 0 6px white}
+.image-view #mediaMessage:empty{display:none}
+.image-view #mediaMessage{position:absolute;right:16px;bottom:54px;max-width:calc(100% - 32px);font-size:11px;text-shadow:0 0 3px white,0 0 6px white}
+.image-view .image-scroll{padding:12px}

@@ -139,6 +139,40 @@ function createWindow() {
         if (!checks.renderOk || !checks.appInitOk || !checks.dialogOk || checks.mdAPI !== 'object' || checks.DOMPurify !== 'function') {
           throw new Error('启动或渲染自检未通过');
         }
+        if (process.env.MD_BROWSER_TEST_WEBDAV_URL) {
+          const testURL=new URL(process.env.MD_BROWSER_TEST_WEBDAV_URL);
+          if(testURL.protocol!=='http:' || testURL.hostname!=='127.0.0.1')throw new Error('Smoke server must be local');
+          const network=await mainWindow.webContents.executeJavaScript(`(async()=>{
+            const check=async(promise)=>{const result=await promise;if(!result.ok)throw new Error(result.error);return result.data;};
+            await check(window.mdAPI.connect({url:${JSON.stringify(testURL.href)},username:'test',password:'test'}));
+            const entries=await check(window.mdAPI.list('/'));
+            if(!entries.some(entry=>entry.name==='readme.md'))throw new Error('Missing test document');
+            const original=await check(window.mdAPI.read('/readme.md'));if(original!=='# Packaged client')throw new Error('Read mismatch');
+            await check(window.mdAPI.create('/created.md','# 保存测试'));
+            await check(window.mdAPI.write('/created.md','# 已修改'));
+            if(await check(window.mdAPI.read('/created.md'))!=='# 已修改')throw new Error('Save mismatch');
+            await check(window.mdAPI.rename('/created.md','/renamed.md'));
+            await check(window.mdAPI.remove('/renamed.md'));
+            await check(window.mdAPI.mkdir('/folder'));
+            await check(window.mdAPI.remove('/folder'));
+            const pdf=new TextEncoder().encode('%PDF-1.4\\npackaged binary check');
+            await check(window.mdAPI.createPDF('/binary.pdf',pdf));
+            const read=await check(window.mdAPI.readPDF('/binary.pdf'));
+            if(Array.from(read).join(',')!==Array.from(pdf).join(','))throw new Error('Binary mismatch');
+            await check(window.mdAPI.remove('/binary.pdf'));
+            await check(window.mdAPI.clearConnection());
+            await check(window.mdAPI.disconnect());return true;
+          })()`);
+          if(!network)throw new Error('Packaged network checks failed');
+          console.log('PACKAGED_WEBDAV_OK');
+        }
+        const dict=await mainWindow.webContents.executeJavaScript("window.mdAPI.lookupCharacter('行')");
+        if(!dict.ok || !dict.data.found || !dict.data.pinyin.includes('háng') || !dict.data.definitions.length)throw new Error('Packaged dictionary data missing');
+        const phrase=await mainWindow.webContents.executeJavaScript("window.mdAPI.lookupCharacter('画蛇添足')");
+        if(!phrase.ok || phrase.data.kind!=='idiom' || !phrase.data.definitions.length)throw new Error('Packaged phrase dictionary missing');
+        const word=await mainWindow.webContents.executeJavaScript("window.mdAPI.lookupCharacter('学习')");
+        if(!word.ok || word.data.kind!=='word' || !word.data.definitions.length)throw new Error('Packaged word dictionary missing');
+        console.log('DICTIONARY_OK');
         console.log('SMOKE_OK');
       } catch (e) {
         console.error('SMOKE_FAIL ' + (e && e.message ? e.message : e));
@@ -184,7 +218,8 @@ handle('webdav:connect', async (cfg) => {
   const root = await webdav.connect(cfg);
   media.clear();
   let credentialWarning = null;
-  try { await credentials.save(cfg); }
+  // Smoke runs use disposable credentials and must not open the user's Keychain.
+  try { if (!process.env.MD_BROWSER_SMOKE) await credentials.save(cfg); }
   catch (error) { credentialWarning = '连接成功，但密码未保存：' + error.message; }
   return { root, credentialWarning };
 });
@@ -353,3 +388,5 @@ handle('app:copy-text', (text) => {
   require('electron').clipboard.writeText(text);
   return true;
 });
+
+handle('app:lookup-character', (text) => require('./dictionary').lookupCharacter(text));

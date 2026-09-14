@@ -195,7 +195,7 @@ Markdown 编辑区默认自动换行，随窗口或分栏宽度调整；行号�
 
 ### Windows 客户端打包
 
-运行 `npm run dist:win` 生成 `dist/MD-Browser-0.1.0-x64-Setup.exe`（安装版）与 `dist/MD-Browser-0.1.0-x64-Portable.exe`（免安装版）。构建脚本在 `.electron-cache/release-app` 创建独立的发布依赖目录，以避免 pnpm 依赖收集遗漏；首次构建需要联网。程序自带 Electron，无需用户另装 Node.js。当前未配置发布者签名证书。
+运行 `npm run dist:win` 生成 `dist/MD-Browser-<版本>-x64-Setup.exe`（安装版）与 `dist/MD-Browser-<版本>-x64-Portable.exe`（免安装版）。构建脚本在 `.electron-cache/release-app` 创建独立的发布依赖目录，以避免 pnpm 依赖收集遗漏；首次构建需要联网。程序自带 Electron，无需用户另装 Node.js。当前未配置发布者签名证书。
 
 ## 网页与阅读进度
 
@@ -203,3 +203,20 @@ Markdown 编辑区默认自动换行，随窗口或分栏宽度调整；行号�
 - Markdown/TXT、Word、PDF 的阅读位置，以及音视频播放时间、图片缩放和旋转状态保存在本机，重启软件后重新打开相同文件即可恢复。按连接及文件路径区分，不上传至 NAS。
 - Markdown/TXT、Word 选中文字显示复制按钮；PDF 保留原有选中文字工具栏。支持 Ctrl+C；Markdown 和 Word 支持 Ctrl+V，Word 按纯文本粘贴。
 - 网页仅允许 HTTP/HTTPS，使用不带应用预加载接口的沙箱容器；不向网页提供 NAS 账号密码。
+
+
+### macOS 客户端打包
+
+安装 Node.js 与 pnpm 后运行 `pnpm run dist:mac`。脚本按本机架构生成 `dist/MD-Browser-<版本>-mac-<架构>.dmg` 和 `.zip`。包内包含完整生产依赖；打包时逐文件校验归档，并启动打包后的应用，连接临时本机 WebDAV 服务验证目录、文本及 PDF 读写。测试使用临时账号数据，不连接真实网盘，也不写入系统钥匙串。测试失败时不会继续生成安装包。
+
+应用使用本地临时签名，未做 Apple 公证。可单独运行 `node test/test-packaged-client.cjs "应用路径/MD Browser.app"` 复查客户端启动与连接。
+
+### 离线字词与成语字典
+
+在 PDF、Markdown 编辑区/预览区或 Word 正文中选中汉字、词语或成语（最多 32 字），悬浮菜单会显示「查字典」。查询卡片显示带声调拼音、多音字读音、中文释义、部首、笔画与繁体字；点击空白或按 Escape 关闭。查询不会修改文档，也不需要网络。词语显示整体拼音及释义；成语还显示字库中已有的出处、例句、用法和近反义词。PDF 选区中的空格、换行会自动忽略。未收录的词语明确提示，不会把单字读音拼成词语读音。内嵌网页和无文字层的扫描件不支持此入口。
+
+词库来自 [mapull/chinese-dictionary](https://github.com/mapull/chinese-dictionary)，包含 21,056 个汉字基础条目，其中 16,221 个有释义。另包含 320,018 个词语与成语条目（其中成语 49,638 条），303,920 条有释义。部分生僻字词可能只有拼音或暂未收录。数据许可证及来源、转换说明和校验值位于 `assets/dictionary/`；保留上游 MIT 声明与其数据来源、准确性说明。该词库是社区整理数据，并非官方出版字典。
+
+重新生成词库：准备上游 `char_base.json`、`char_detail.json`、`LICENSE` 后运行 `node scripts/import-dictionary.cjs <数据目录>`。运行 `pnpm run test:dictionary` 和 `pnpm run test:dictionary-ui` 可验证数据及选字交互。
+
+扩展词库：准备上游 `word.json`、`idiom.json` 后运行 `node scripts/import-phrases.cjs <数据目录>`。按首字编码分为 256 个文件，查询时仅加载需要的分片并保留最近 8 个，避免启动时加载整个词库。词语数据来源和校验值见 `assets/dictionary/PHRASES-SOURCE.json`。

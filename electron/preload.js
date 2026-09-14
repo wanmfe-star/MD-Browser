@@ -4,6 +4,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('mdAPI', {
+  lookupCharacter: (text) => ipcRenderer.invoke('app:lookup-character', text),
   copyText: (text) => ipcRenderer.invoke('app:copy-text', text),
   connect: (cfg) => ipcRenderer.invoke('webdav:connect', cfg),
   loadConnection: () => ipcRenderer.invoke('app:load-connection'),

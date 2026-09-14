@@ -1,6 +1,6 @@
 {
   "name": "md-browser",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "连接 WebDAV 的文档编辑与多媒体浏览客户端",
   "main": "electron/main.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "dev": "electron .",
     "test:webdav": "node test/test-webdav.mjs",
     "test:renderer": "node test/test-renderer.mjs",
-    "test": "npm run test:webdav && npm run test:renderer && npm run test:format && npm run test:credentials && npm run test:import && npm run test:word && npm run test:media",
+    "test": "npm run test:webdav && npm run test:renderer && npm run test:format && npm run test:credentials && npm run test:import && npm run test:word && npm run test:media && npm run test:dictionary",
     "test:format": "node test/test-format.cjs",
     "test:credentials": "node test/test-credentials.cjs",
     "test:import": "node test/test-import.cjs",
@@ -27,7 +27,12 @@
     "test:workspace": "electron test/test-workspace.cjs",
     "test:editor-wrap": "electron test/test-editor-wrap.cjs",
     "dist:win": "node scripts/build-win.cjs",
-    "test:browser-progress": "electron test/test-browser-progress.cjs"
+    "test:browser-progress": "electron test/test-browser-progress.cjs",
+    "dist:mac": "node scripts/build-mac.cjs",
+    "test:packaged": "node test/test-packaged-client.cjs",
+    "test:dictionary": "node test/test-dictionary.cjs",
+    "test:dictionary-ui": "electron test/test-dictionary-ui.cjs",
+    "test:image-layout": "electron test/test-image-layout.cjs"
   },
   "license": "MIT",
   "dependencies": {
@@ -79,10 +84,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "MD Browser",
-      "artifactName": "MD-Browser-0.1.0-x64-Setup.exe"
+      "artifactName": "MD-Browser-${version}-${arch}-Setup.exe"
     },
     "portable": {
-      "artifactName": "MD-Browser-0.1.0-x64-Portable.exe"
+      "artifactName": "MD-Browser-${version}-${arch}-Portable.exe"
     },
     "electronVersion": "33.4.11"
   }

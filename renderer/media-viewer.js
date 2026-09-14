@@ -7,7 +7,7 @@
   el('audioLoop').onclick=()=>{loop=!loop;loopUI();try{localStorage.setItem('md-browser.audioLoop',String(loop));}catch{}};
   function clear(){
     if(document.fullscreenElement===el('videoStage'))document.exitFullscreen().catch(()=>{});
-    item=null;playlist=[];
+    item=null;playlist=[];el('imageToolbar').hidden=true;
     for(const player of [audio,video]){player.pause();player.removeAttribute('src');player.load();}
     picture.removeAttribute('src');
     if(ticket){window.mdAPI.releaseMedia(ticket.url).catch(()=>{});ticket=null;}
@@ -48,7 +48,8 @@
   function imageLayout(){
     if(!picture.naturalWidth||item?.kind!=='image')return;
     const rotated=rotation%180!==0,width=rotated?picture.naturalHeight:picture.naturalWidth,height=rotated?picture.naturalWidth:picture.naturalHeight;
-    const area=el('imageScroll'),fit=Math.min(Math.max(80,area.clientWidth-48)/width,Math.max(80,area.clientHeight-48)/height,1),scale=fit*zoom;
+    const area=el('imageScroll'),padding=getComputedStyle(area);
+    const fit=Math.min(Math.max(1,area.clientWidth-parseFloat(padding.paddingLeft)-parseFloat(padding.paddingRight))/width,Math.max(1,area.clientHeight-parseFloat(padding.paddingTop)-parseFloat(padding.paddingBottom))/height,1),scale=fit*zoom;
     el('imageCanvas').style.width=width*scale+'px';el('imageCanvas').style.height=height*scale+'px';
     picture.style.width=picture.naturalWidth*scale+'px';picture.style.height=picture.naturalHeight*scale+'px';
     picture.style.transform='translate(-50%, -50%) rotate('+rotation+'deg)';el('imageScale').textContent=Number((scale*100).toFixed(1))+'%';
@@ -59,11 +60,14 @@
   el('imageScroll').addEventListener('wheel',event=>{if(item?.kind==='image'&&event.ctrlKey){event.preventDefault();event.stopPropagation();imageZoom(zoom+window.viewZoom.delta(event,el('imageScroll')));}},{passive:false});
   picture.onload=()=>{imageLayout();el('mediaMessage').textContent='';};picture.onerror=()=>{if(item?.kind==='image'){el('mediaMessage').textContent='图片加载失败，请检查网络、权限或图片格式。';setStatus('图片加载失败','error');}};
   window.addEventListener('resize',imageLayout);
+  new ResizeObserver(imageLayout).observe(el('imageScroll'));
   function load(next,descriptor,queue){
     clear();item={...next,kind:descriptor.kind};ticket=descriptor;playlist=queue.slice();zoom=1;rotation=0;
+    el('imageToolbar').hidden=item.kind!=='image';
     el('audioPanel').hidden=item.kind!=='audio';el('videoStage').hidden=item.kind!=='video';el('imagePanel').hidden=item.kind!=='image';
     el('mediaLabel').textContent={audio:'音乐播放',video:'视频播放',image:'图片查看'}[item.kind];
     el('mediaPrevious').textContent={audio:'上一首',video:'上个视频',image:'上一张'}[item.kind];el('mediaNext').textContent={audio:'下一首',video:'下个视频',image:'下一张'}[item.kind];
+    for(const id of ['mediaPrevious','mediaNext']){const button=el(id);button.title=button.textContent;button.setAttribute('aria-label',button.textContent);if(item.kind==='image')button.textContent=id==='mediaPrevious'?'‹':'›';}
     el('audioTitle').textContent=item.name;el('mediaMessage').textContent='正在加载…';queueUI();
     if(item.kind==='image'){picture.alt=item.name;picture.src=ticket.url;}
     else {const player=item.kind==='audio'?audio:video;player.src=ticket.url;player.load();loopUI();player.play().catch(error=>{if(error.name==='NotAllowedError')el('mediaMessage').textContent='点击播放按钮开始播放';});}

@@ -24,7 +24,7 @@
     const quads=a.quads?.length?a.quads:[[a.rectPdf[0],a.rectPdf[3],a.rectPdf[2],a.rectPdf[3],a.rectPdf[0],a.rectPdf[1],a.rectPdf[2],a.rectPdf[1]]];
     return quads.map(q=>{const pts=[];for(let i=0;i<8;i+=2)pts.push(viewportNow.convertToViewportPoint(q[i],q[i+1]));const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return {x:Math.min(...xs)/viewportNow.width,y:Math.min(...ys)/viewportNow.height,w:(Math.max(...xs)-Math.min(...xs))/viewportNow.width,h:(Math.max(...ys)-Math.min(...ys))/viewportNow.height};});
   }
-  function popupMode(object){['pdfTextCopy','pdfTextHighlight','pdfTextUnderline'].forEach(id=>el(id).hidden=object);floating.querySelector('span').hidden=object;el('pdfDeleteAnnotation').hidden=!object;}
+  function popupMode(object){el('pdfDictionary').hidden=object || !window.dictionaryLookup?.canLookup(getSelection().toString());['pdfTextCopy','pdfTextHighlight','pdfTextUnderline'].forEach(id=>el(id).hidden=object);floating.querySelector('span').hidden=object;el('pdfDeleteAnnotation').hidden=!object;}
   function placePopup(anchor){
     const area=scroll.getBoundingClientRect();if(anchor.bottom<area.top || anchor.top>area.bottom){floating.hidden=true;return;}
     floating.hidden=false;const w=floating.offsetWidth,h=floating.offsetHeight;
@@ -32,7 +32,7 @@
     const above=anchor.top-h-10;floating.style.top=`${Math.max(area.top+6,Math.min(above>=area.top+6?above:anchor.bottom+10,Math.min(area.bottom,innerHeight)-h-6))}px`;
   }
   function updateSelectionToolbar() {
-    if(loading || !active || tool!=='select' || selecting) { hideSelectionToolbar();return; }
+    if(loading || !active || tool!=='select' || selecting || window.dictionaryLookup?.isOpen()) { hideSelectionToolbar();return; }
     if(selectedAnnotation){const a=actions.find(a=>a.id===selectedAnnotation);if(a && a.page===page){const r=annotationRects(a)[0],b=base.getBoundingClientRect();popupMode(true);placePopup({left:b.left+r.x*b.width,top:b.top+r.y*b.height,bottom:b.top+(r.y+r.h)*b.height,width:r.w*b.width});return;}}
     const selection=window.getSelection();
     if(!selection.rangeCount || selection.isCollapsed || !selection.toString().trim()) {hideSelectionToolbar();return;}
@@ -60,6 +60,7 @@
     try {const result=await window.mdAPI.copyText(text);if(!result.ok)throw new Error(result.error);status('已复制所选文字');hideSelectionToolbar();}
     catch(error){status('复制失败：'+error.message);}
   };
+  el('pdfDictionary').onclick=()=>{restoreSelection();const text=getSelection().toString(),rect=floating.getBoundingClientRect();hideSelectionToolbar();window.dictionaryLookup.show(text,rect);};
   const native = a => a.tool === 'textHighlight' || a.tool === 'textUnderline';
   const fitText = () => {
     if (!viewportNow) return;

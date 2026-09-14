@@ -1,0 +1,20 @@
+'use strict';
+const {app,BrowserWindow,ipcMain}=require('electron');
+const path=require('node:path'),os=require('node:os'),fs=require('node:fs/promises'),assert=require('node:assert/strict');
+app.setPath('userData',path.join(os.tmpdir(),'md-image-layout-'+process.pid));app.disableHardwareAcceleration();
+ipcMain.handle('app:load-connection',()=>({ok:true,data:null}));ipcMain.handle('media:release',()=>({ok:true}));
+const timeout=setTimeout(()=>app.exit(1),30000);
+app.whenReady().then(async()=>{
+ const win=new BrowserWindow({show:false,width:1200,height:900,webPreferences:{preload:path.join(__dirname,'../electron/preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:false}});
+ await win.loadFile(path.join(__dirname,'../renderer/index.html'));const js=s=>win.webContents.executeJavaScript(s,true);
+ await js(`(()=>{const c=document.createElement('canvas');c.width=600;c.height=1200;const ctx=c.getContext('2d');ctx.fillStyle='#47765a';ctx.fillRect(0,0,600,1200);ctx.fillStyle='#edf2e9';ctx.font='40px sans-serif';ctx.fillText('图片预览',100,180);const file={path:'/sample.png',name:'图片预览示例.png',kind:'image'};state.currentFile=file;docName.textContent=file.name;applyViewMode();mediaViewer.load(file,{kind:'image',url:c.toDataURL()},[file,{...file,path:"/next.png",name:"下一张.png"}]);})()`);
+ const tick=()=>new Promise(r=>setTimeout(r,100));await tick();await tick();
+ const metrics=()=>js(`(()=>{const r=s=>document.querySelector(s).getBoundingClientRect();const stage=r('#imageScroll'),tools=r('#imageToolbar'),prev=r('#mediaPrevious'),next=r('#mediaNext');return {header:r('.document-header').height,gap:stage.top-r('.document-header').bottom,left:prev.left-stage.left,right:stage.right-next.right,center:Math.abs((prev.top+prev.bottom)/2-(stage.top+stage.bottom)/2),toolsBottom:stage.bottom-tools.bottom,toolsRight:stage.right-tools.right,width:parseFloat(mediaImage.style.width),height:parseFloat(mediaImage.style.height),area:imageScroll.clientHeight,transparent:getComputedStyle(document.querySelector('.media-toolbar')).backgroundColor,hit:document.elementFromPoint(stage.left+stage.width/2,stage.top+40)?.id};})()`);
+ let m=await metrics();assert.ok(m.header<75);assert.equal(m.gap,0,'toolbar occupies no document space');assert.ok(m.left<20 && m.right<20 && m.center<2,JSON.stringify(m));assert.ok(m.toolsBottom<20);assert.equal(m.transparent,'rgba(0, 0, 0, 0)');assert.notEqual(m.hit,'','image remains interactive');assert.ok(m.height<=m.area-24+1);
+ await js("imageZoomIn.click()");assert.ok((await metrics()).width>m.width);await js("imageRotate.click()");assert.ok(await js("mediaImage.style.transform.includes('90deg')"));
+ await js("imageRotate.click();imageRotate.click();imageRotate.click();imageFit.click()");await tick();
+ await fs.mkdir(path.join(__dirname,'../output'),{recursive:true});await fs.writeFile(path.join(__dirname,'../output/image-floating.png'),(await win.webContents.capturePage()).toPNG());
+ win.setSize(680,800);await tick();m=await metrics();assert.equal(m.gap,0);assert.ok(m.toolsRight>=0 && m.toolsBottom>=0);assert.ok(await js("document.documentElement.scrollWidth<=innerWidth"));
+ await js("state.currentFile={kind:'audio'};applyViewMode();mediaViewer.clear()");assert.equal(await js("primaryPane.classList.contains('image-view')"),false);assert.equal(await js("imageToolbar.hidden"),true);
+ console.log('IMAGE_LAYOUT_OK: side navigation, transparent bottom controls, fit, zoom, rotation, narrow window and media switching');clearTimeout(timeout);app.exit(0);
+}).catch(e=>{console.error(e);app.exit(1);});
