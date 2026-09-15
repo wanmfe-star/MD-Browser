@@ -18,7 +18,9 @@ function getClient() {
 
 async function connect({ url, username, password }) {
   const { createClient, AuthType } = await getLib();
-  const base = url.replace(/\/+$/, '') + '/';
+  // MOVE/COPY concatenate remoteURL directly into the Destination header.
+  // Canonicalize the base too: fetch encodes request URLs, but never header values.
+  const base = new URL(url.replace(/\/+$/, '') + '/').href;
   const candidate = createClient(base, {
     username: username || '',
     password: password || '',

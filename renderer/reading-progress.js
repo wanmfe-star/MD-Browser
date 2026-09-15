@@ -5,8 +5,9 @@
   const read=key=>{try{return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;}};
   function save(){
     clearTimeout(timer);if(!current||current!==state.currentFile||!key)return;
-    const kind=current.kind;let value={kind,updated:Date.now()};
-    if(kind==='pdf')value.pdf=window.pdfAnnotations.position();
+    const kind=current.kind;if(kind==='mindmap'&&window.mindMapPane.instance?.demonstrate?.isInDemonstrate)return;let value={kind,updated:Date.now()};
+    if(kind==='mindmap')value.view=window.mindMapPane.instance?.view.getTransformData();
+    else if(kind==='pdf')value.pdf=window.pdfAnnotations.position();
     else if(kind==='docx')Object.assign(value,{top:el('wordScroll').scrollTop,left:el('wordScroll').scrollLeft,zoom:window.wordEditor.getZoom()});
     else if(kind==='audio'||kind==='video'){const player=el(kind==='audio'?'mediaAudio':'mediaVideo');if(!player.readyState)return;value.time=player.ended?0:player.currentTime;}
     else if(kind==='image')Object.assign(value,{...window.mediaViewer.position(),top:el('imageScroll').scrollTop,left:el('imageScroll').scrollLeft});
@@ -31,7 +32,8 @@
     }
     await frame();if(token!==generation||state.currentFile!==item)return;
     if(value){
-      if(kind==='pdf')await window.pdfAnnotations.restorePosition(value.pdf||{});
+      if(kind==='mindmap'&&value.view)window.mindMapPane.instance?.view.setTransformData(value.view);
+      else if(kind==='pdf')await window.pdfAnnotations.restorePosition(value.pdf||{});
       else if(kind==='docx'){window.wordEditor.setZoom(value.zoom||1);el('wordScroll').scrollTop=value.top||0;el('wordScroll').scrollLeft=value.left||0;}
       else if(!kind){if(['edit','preview','split'].includes(value.mode)){state.viewMode=value.mode;applyViewMode();}editorEl.setSelectionRange(value.cursor||0,value.cursor||0);editorEl.scrollTop=value.top||0;editorEl.scrollLeft=value.left||0;preview.scrollTop=value.previewTop||0;}
     } else if(kind==='docx'){el('wordScroll').scrollTop=0;el('wordScroll').scrollLeft=0;}

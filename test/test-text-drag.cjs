@@ -1,0 +1,27 @@
+'use strict';
+require('../electron/media-protocol');
+const {app}=require('electron'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
+const {fixture}=require('./test-docx.cjs');app.setPath('userData',path.join(os.tmpdir(),'text-drag-'+process.pid));
+let server;const timeout=setTimeout(()=>app.exit(1),45000);
+(async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'text-drag-files-'));await fs.writeFile(path.join(root,'a.md'),'# Left notes');await fs.writeFile(path.join(root,'word.docx'),await fixture());
+ server=await(await import('./mock-webdav.mjs')).startWebDAVServer(root);
+ const ready=new Promise(resolve=>app.once('browser-window-created',(_event,win)=>{win.hide();win.webContents.setBackgroundThrottling(false);win.webContents.once('did-finish-load',()=>resolve(win));}));require('../electron/main');const win=await ready,js=code=>win.webContents.executeJavaScript(code,true);
+ await js('connUrl.value='+JSON.stringify('http://127.0.0.1:'+server.port)+';runAction(doConnect)');await js('runAction(()=>openFile({path:"/a.md",name:"a.md"}))');await js('workspace.enable("left");');await js('workspace.open({path:"/word.docx",name:"word.docx"},"right")');
+ const frame=win.webContents.mainFrame.frames.find(f=>f.url.includes('pane=secondary')),second=code=>frame.executeJavaScript(code,true);
+ const before=await second('document.querySelector(".word-paragraph").textContent');
+ await js('state.viewMode="edit";applyViewMode();editorEl.focus();editorEl.setSelectionRange(2,6)');
+ assert.equal(await js('(()=>{const d=new DataTransfer();editorEl.dispatchEvent(new DragEvent("dragstart",{bubbles:true,dataTransfer:d}));return d.getData("text/plain");})()'),'Left');
+ await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+ const offset=await js('(()=>{const r=document.querySelector(".secondary-pane").getBoundingClientRect();return {x:r.left,y:r.top};})()');
+ const point=await second('(()=>{const r=document.createRange();r.selectNodeContents(document.querySelector(".word-paragraph"));const b=r.getClientRects()[0];return {x:b.left+1,y:b.top+Math.max(4,b.height/2)};})()');
+ win.webContents.debugger.attach('1.3');
+ const drop=async(x,y,text)=>{const data={items:[{mimeType:'text/plain',data:text},{mimeType:'text/html',data:'<img src=x onerror=alert(1)>'}],dragOperationsMask:1};for(const type of ['dragEnter','dragOver','drop'])await win.webContents.debugger.sendCommand('Input.dispatchDragEvent',{type,x,y,data});};
+ await drop(offset.x+point.x,offset.y+point.y,'Left');assert.equal(await second('document.querySelector(".word-paragraph").textContent'),'Left'+before);assert.equal(await js('editorEl.value'),'# Left notes','source is copied, not moved');
+ await second('$("wordUndo").click()');assert.equal(await second('document.querySelector(".word-paragraph").textContent'),before);
+ const target=await js('(()=>{const r=editorEl.getBoundingClientRect(),s=getComputedStyle(editorEl);return {x:r.left+parseFloat(s.paddingLeft)+1,y:r.top+parseFloat(s.paddingTop)+8};})()');
+ await drop(target.x,target.y,'拖拽文本\n');assert.equal(await js('editorEl.value'),'拖拽文本\n# Left notes');assert.equal(await second('document.querySelector(".word-paragraph").textContent'),before);
+ win.webContents.undo();await new Promise(r=>setTimeout(r,100));assert.equal(await js('editorEl.value'),'# Left notes','Markdown drop is undoable');
+ await drop(offset.x+point.x,offset.y+point.y,'第一行\n第二行');assert.ok(await second('document.getElementById("wordPage").textContent.includes("第二行")'));await second('runAction(save)');const doc=await require('../electron/docx').inspectDocx(await fs.readFile(path.join(root,'word.docx')));assert.ok(doc.blocks.some(b=>b.text.includes('第二行')),'Word dropped text saves to original DOCX');
+ win.webContents.debugger.detach();console.log('TEXT_DRAG_OK: real cross-frame drops, copy-only source, precise Markdown/Word insertion, multiline text, undo and DOCX save');clearTimeout(timeout);await server.close();app.exit(0);
+})().catch(error=>{console.error(error);clearTimeout(timeout);app.exit(1);});

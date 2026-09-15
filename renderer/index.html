@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data: mdmedia:; media-src 'self' mdmedia: blob:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'self' blob:" />
   <title>MD Browser</title><script src="./pane-bootstrap.js"></script>
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css" /><link rel="stylesheet" href="./mind-map.css" />
 </head>
 <body>
   <div id="importDropOverlay" class="import-drop-overlay" hidden></div>
@@ -15,7 +15,7 @@
     <aside class="sidebar">
       <div class="brand"><img class="brand-logo" src="../assets/logo.svg" alt="" /> MD Browser</div>
       <div class="sidebar-heading"><span>文件</span><div class="toolbar"><button id="importFile" class="icon-btn" title="批量导入文档、音乐、视频和图片，也可拖入文件" aria-label="导入文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11 M8 10l4 4 4-4 M4 15v5h16v-5"/></svg></button>
-        <button id="newFile" class="icon-btn" title="新建 Markdown 文件" aria-label="新建文件"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16 M4 12h16"/></svg></button>
+        <details id="newDocumentMenu" class="new-document-menu"><summary class="icon-btn" title="新建文件" aria-label="新建文件">＋</summary><div class="new-document-options"><button id="newFile" class="icon-btn" title="新建 Markdown 文件">Markdown 文件</button><button id="newMindMap" type="button">思维导图</button></div></details>
         <button id="newDir" class="icon-btn" title="新建文件夹" aria-label="新建文件夹"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5h6l2 2h10v13H3Z M12 10v7 M8.5 13.5h7"/></svg></button>
         <button id="refresh" class="icon-btn" title="刷新" aria-label="刷新"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10a8 8 0 1 0 0 5 M20 4v6h-6"/></svg></button>
       </div></div>
@@ -88,6 +88,6 @@
   <dialog id="nameDialog"><form id="nameForm" method="dialog"><label id="nameTitle" for="nameInput"></label><input id="nameInput" type="text" autocomplete="off" required /><div class="dialog-actions"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" value="ok" type="submit">确定</button></div></form></dialog>
 <div id="pdfSelectionToolbar" class="pdf-selection-toolbar" role="toolbar" aria-label="选中文字操作" hidden><button id="pdfTextCopy">复制</button><button id="pdfDictionary" hidden>查字典</button><span></span><button id="pdfTextHighlight">高亮</button><button id="pdfTextUnderline">下划线</button><button id="pdfDeleteAnnotation" hidden>删除标注</button></div>
 
-  <script src="../node_modules/marked/marked.min.js"></script><script src="../node_modules/dompurify/dist/purify.min.js"></script><script src="./document-style.js"></script><script src="./format.js"></script><script src="./view-zoom.js"></script><script src="../shared/dictionary-query.js"></script><script src="./dictionary.js"></script><script src="./pdf-annotations.js"></script><script src="../shared/word-runs.js"></script><script src="./word-editor.js"></script><script src="../shared/media-types.js"></script><script src="./media-viewer.js"></script><script src="./app.js"></script><script src="./editor-wrap.js"></script><script src="./reading-progress.js"></script><script src="./browser-bookmarks.js"></script><script src="./browser-pane.js"></script><script src="./selection-copy.js"></script><script src="./pane-api.js"></script><script src="./workspace.js"></script>
-</body>
+  <script src="../node_modules/marked/marked.min.js"></script><script src="../node_modules/dompurify/dist/purify.min.js"></script><script src="./document-style.js"></script><script src="./format.js"></script><script src="./view-zoom.js"></script><script src="../shared/dictionary-query.js"></script><script src="./dictionary.js"></script><script src="./pdf-annotations.js"></script><script src="../shared/word-runs.js"></script><script src="./word-editor.js"></script><script src="../shared/media-types.js"></script><script src="./media-viewer.js"></script><script src="./app.js"></script><script src="./editor-wrap.js"></script><script src="./reading-progress.js"></script><script src="./browser-bookmarks.js"></script><script src="./browser-pane.js"></script><script src="./selection-copy.js"></script><script src="./text-drag.js"></script><script src="./mind-map.js"></script><script src="./pane-api.js"></script><script src="./workspace.js"></script>
+<script src="./overlay-dismiss.js"></script></body>
 </html>

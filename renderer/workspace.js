@@ -53,6 +53,14 @@
     async canReplaceActive(){return active==='primary'?canDiscard():clients.secondary.canLeave();},
     showStatus(message){el('workspaceNotice').textContent=active==='secondary'?message:'';},
     beginMutation(from,caller){const affected=Object.values(clients).filter(c=>c.id!==caller&&c.file()&&containsPath(from,c.file().path));if(affected.some(c=>c.busy()))return null;const resume=affected.map(c=>c.pause());return ()=>resume.forEach(fn=>fn());},
+    async waitForMutation(from,caller){
+      const deadline=Date.now()+15000;
+      while(!this.mutationAllowed(caller)){
+        if(Date.now()>=deadline)return null;
+        await new Promise(resolve=>setTimeout(resolve,50));
+      }
+      return this.beginMutation(from,caller);
+    },
     sync(){clients.secondary?.adopt(connection());},
     async canChangeConnection(){if(clients.secondary&&!await clients.secondary.canLeave())return false;return true;},
     connectionChanged(){clients.secondary?.reset();this.sync();},

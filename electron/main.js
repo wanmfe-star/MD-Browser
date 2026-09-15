@@ -291,7 +291,7 @@ handle('app:export-pdf', async (payload) => {
 handle('app:select-import-documents', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '导入文档（可多选）', properties: ['openFile', 'multiSelections'],
-    filters: [{ name: '文档 / 音乐 / 视频 / 图片', extensions: ['md', 'markdown', 'pdf', 'docx', 'doc', 'txt', 'text', ...require('../shared/media-types').extensions] }],
+    filters: [{ name: '文档 / 音乐 / 视频 / 图片', extensions: ['smm', 'mindmap', 'md', 'markdown', 'pdf', 'docx', 'doc', 'txt', 'text', ...require('../shared/media-types').extensions] }],
   });
   return result.canceled ? [] : result.filePaths.map(filePath => ({ path: filePath, name: path.basename(filePath) }));
 });

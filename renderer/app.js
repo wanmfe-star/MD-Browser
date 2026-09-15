@@ -53,14 +53,17 @@ function syncControls(action) {
   discBtn.disabled = state.busy || !state.connected;
   [connUrl, connUser, connPass].forEach(el => { el.disabled = state.busy || state.connected; });
   [newFileBtn, newDirBtn, refreshBtn].forEach(el => { el.disabled = state.busy || !state.connected; });
+  if ($('newMindMap')) $('newMindMap').disabled = state.busy || !state.connected;
+  if ($('emptyCreateMindMap')) $('emptyCreateMindMap').disabled = state.busy || !state.connected;
+  if ($('mindMapPane')) $('mindMapPane').inert = state.busy && action !== save;
   const emptyCreate = $('emptyCreateMarkdown');
   if (emptyCreate) emptyCreate.disabled = state.busy || !state.connected;
   $('openSystemFile').disabled = state.busy || !state.connected || state.currentFile?.kind !== 'external';
   $('importFile').disabled = state.busy || !state.connected;
-  $('exportPdf').disabled = state.busy || !state.currentFile || ['pdf','docx','audio','video','image','external'].includes(state.currentFile.kind);
+  $('exportPdf').disabled = state.busy || !state.currentFile || ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile.kind);
   [renameBtn, deleteBtn].forEach(el => { el.disabled = state.busy || !state.connected || !state.currentFile; });
-  editorEl.readOnly = !state.currentFile || ['pdf','docx','audio','video','image','external'].includes(state.currentFile.kind) || (state.busy && action !== save);
-  viewSeg.querySelectorAll('button').forEach(button => { button.disabled = ['pdf','docx','audio','video','image','external'].includes(state.currentFile?.kind); });
+  editorEl.readOnly = !state.currentFile || ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile.kind) || (state.busy && action !== save);
+  viewSeg.querySelectorAll('button').forEach(button => { button.disabled = ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile?.kind); });
   $('formatToolbar').querySelectorAll('button, select, input').forEach(button => { button.disabled = editorEl.readOnly; });
   window.wordEditor?.setLocked(state.busy || state.currentFile?.kind !== 'docx');
 }
@@ -241,7 +244,7 @@ function renderList() {
     const folder = item.type === 'directory';
     const li = document.createElement('li'); const button = document.createElement('button');
     button.className = 'file-row' + ((window.workspace?.activeFile() || state.currentFile)?.path === item.path ? ' active' : '');
-    button.innerHTML = fileIcon(folder) + '<span class="name">' + escapeHtml(item.name) + '</span>' + (folder ? '<span class="meta">›</span>' : /\.pdf$/i.test(item.name) ? '<span class="file-pdf-badge">PDF</span>' : window.mediaTypes?.type(item.name) ? '<span class="file-pdf-badge">' + ({audio:'音乐',video:'视频',image:'图片'})[window.mediaTypes.type(item.name).kind] + '</span>' : '');
+    button.innerHTML = fileIcon(folder) + '<span class="name">' + escapeHtml(item.name) + '</span>' + (folder ? '<span class="meta">›</span>' : /\.(smm|mindmap)$/i.test(item.name) ? '<span class="file-pdf-badge">导图</span>' : /\.pdf$/i.test(item.name) ? '<span class="file-pdf-badge">PDF</span>' : window.mediaTypes?.type(item.name) ? '<span class="file-pdf-badge">' + ({audio:'音乐',video:'视频',image:'图片'})[window.mediaTypes.type(item.name).kind] + '</span>' : '');
     button.title = item.name;
     button.addEventListener('contextmenu', e => { e.preventDefault(); runAction(() => showFileMenu(item)); });
     button.addEventListener('click', () => folder ? navigate(item.path) : runAction(() => openFile(item)));
@@ -255,6 +258,7 @@ async function openFile(item, discardApproved = false, local = false) {
   if (!local && window.workspace) return window.workspace.open(item,undefined,true,discardApproved);
   if (!discardApproved && !(await canDiscard())) return;
   if (window.mediaTypes?.type(item.name)) return openMedia(item);
+  if (/\.(smm|mindmap)$/i.test(item.name)) return window.mindMapPane.open(item);
   if (/\.pdf$/i.test(item.name)) return openPDF(item);
   if (/\.docx$/i.test(item.name)) return openWord(item);
   if (!isMarkdown(item.name) && !/\.(txt|text)$/i.test(item.name)) return openUnsupported(item);
@@ -316,6 +320,7 @@ function releasePDF() {
   window.browserPane?.hide();
   window.mediaViewer?.clear();
   window.wordEditor?.clear();
+  window.mindMapPane?.clear();
   window.pdfAnnotations?.clear();
   if (state.pdfUrl) {
     $('pdfViewer').src = 'about:blank';
@@ -379,7 +384,7 @@ async function openPDF(item) {
 }
 
 function renderPreview() {
-  if (['pdf','docx','audio','video','image','external'].includes(state.currentFile?.kind)) return;
+  if (['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile?.kind)) return;
   const text = editorEl.value;
   if (!text.trim()) {
     previewEl.innerHTML = '<div class="placeholder">（空文档）</div>';
@@ -543,15 +548,17 @@ enableControlZoom(previewPane, () => previewFontSize, setPreviewFontSize, 14);
 
 function applyViewMode() {
   const pdf = state.currentFile?.kind === 'pdf', word = state.currentFile?.kind === 'docx', media = !!window.mediaTypes?.isKind(state.currentFile?.kind);
+  const mindmap = state.currentFile?.kind === 'mindmap';
+  if ($('mindMapPane')) $('mindMapPane').hidden = !mindmap;
   const external = state.currentFile?.kind === 'external';
   $('unsupportedPane').hidden = !external;
   $('mediaPane').hidden = !media;
   $('primaryPane').classList.toggle('image-view',state.currentFile?.kind === 'image');
   $('wordPane').hidden = !word;
-  $('markdownPanes').style.display = pdf || word || media || external ? 'none' : '';
+  $('markdownPanes').style.display = pdf || word || media || external || mindmap ? 'none' : '';
   $('pdfPane').hidden = !pdf;
-  viewSeg.style.display = pdf || word || media || external ? 'none' : '';
-  $('textEncoding').hidden = pdf || word || media || external;
+  viewSeg.style.display = pdf || word || media || external || mindmap ? 'none' : '';
+  $('textEncoding').hidden = pdf || word || media || external || mindmap;
   $('saveHint').hidden = pdf || media || external;
   $('saveHint').textContent = word ? 'Ctrl+S 保存 Word' : '自动保存 · Ctrl+S 立即保存';
   const m = state.viewMode;
@@ -655,9 +662,9 @@ async function importDocument(files) {
         if (!result.ok) throw new Error(result.error);
         if (cancelImport) break;
         const converted = result.data, pdf = converted.kind === 'pdf', word = converted.kind === 'docx';
-        const extension = converted.media ? /\.[^.]+$/.exec(converted.name)[0].toLowerCase() : pdf ? '.pdf' : word ? '.docx' : '.md';
+        const extension = converted.kind === 'mindmap' ? /\.[^.]+$/.exec(converted.name)[0].toLowerCase() : converted.media ? /\.[^.]+$/.exec(converted.name)[0].toLowerCase() : pdf ? '.pdf' : word ? '.docx' : '.md';
         let name = converted.name;
-        if (files.length === 1) name = await promptName(converted.media ? '上传媒体文件（保留原格式）：' : pdf ? '导入 PDF（保留原格式）：' : word ? '导入 Word（保留原格式）：' : '导入为 Markdown 文件：', name);
+        if (files.length === 1) name = await promptName(converted.kind === 'mindmap' ? '上传思维导图（保留原格式）：' : converted.media ? '上传媒体文件（保留原格式）：' : pdf ? '导入 PDF（保留原格式）：' : word ? '导入 Word（保留原格式）：' : '导入为 Markdown 文件：', name);
         while (name) {
           // Apply the same validation to filesystem names as to manually entered names.
           if (/[\\/:*?"<>|\u0000-\u001f]/.test(name) || name === '.' || name === '..' || !name.trim()) {
@@ -809,19 +816,36 @@ async function renameItem(item) {
   const extension = (window.mediaTypes?.type(item.name) ? /\.[^.]+$/.exec(item.name)?.[0] : /\.(pdf|docx)$/i.exec(item.name)?.[0])?.toLowerCase();
   if (name && extension && !name.toLowerCase().endsWith(extension)) name += extension;
   if (!name || name === item.name) return;
-  await relocateItem(item, joinPath(parentPath(item.path), name));
+  try {
+    const renamed=await relocateItem(item, joinPath(parentPath(item.path), name));
+    if(renamed)setStatus('已重命名为：'+name,'ok');
+    else showRenameFailure(statusEl.textContent);
+  } catch(error) { showRenameFailure('重命名未完成：'+error.message); }
+}
+
+function showRenameFailure(message){
+  setStatus(message,'error');
+  let dialog=$('renameFailureDialog');
+  if(!dialog){
+    dialog=document.createElement('dialog');dialog.id='renameFailureDialog';
+    dialog.innerHTML='<h2>重命名未完成</h2><p role="status"></p><form method="dialog"><div class="dialog-actions"><button class="btn primary">知道了</button></div></form>';
+    document.body.append(dialog);
+  }
+  dialog.querySelector('p').textContent=message;
+  if(!dialog.open)dialog.showModal();
 }
 
 async function relocateItem(item, to) {
   const host=window.workspace||window.paneHost;
-  if(host&&!host.mutationAllowed(window.isPaneChild?'secondary':'primary')){setStatus('另一栏正在保存或加载，请稍后再试');return;}
   const from = normalizedPath(item.path);
   to = normalizedPath(to);
-  if (containsPath(from, to)) { setStatus('不能移动到自身或子目录', 'error'); return; }
+  if (containsPath(from, to)) { setStatus('不能移动到自身或子目录', 'error'); return false; }
   const affectsOpen = state.currentFile && containsPath(from, state.currentFile.path);
   if (affectsOpen && isDirty()) persistDraft();
-  const resume=host?.beginMutation(from,window.isPaneChild?'secondary':'primary');
-  if(host&&!resume){setStatus('另一栏正在保存，请稍后再试','error');return;}
+  const caller=window.isPaneChild?'secondary':'primary';
+  if(host&&!host.mutationAllowed(caller))setStatus('正在等待另一栏完成保存或加载，随后继续重命名…');
+  const resume=host?await host.waitForMutation(from,caller):null;
+  if(host&&!resume){setStatus('等待另一栏操作完成超时；文件尚未改名，请稍后重试','error');return false;}
   try {
   const res = await window.mdAPI.rename(from, to);
   if (!res.ok) { setStatus('移动或重命名失败：' + res.error, 'error'); return; }
@@ -837,6 +861,7 @@ async function relocateItem(item, to) {
   await host?.moved(from,to,window.isPaneChild?'secondary':'primary');
   await refreshDir();
   setStatus(draftsOk ? '已移动至 ' + to : '远程操作已完成，本地草稿迁移失败，原草稿仍保留', draftsOk ? 'ok' : 'error');
+  return true;
   } finally { resume?.(); }
 }
 
@@ -931,7 +956,7 @@ function escapeHtml(s) {
 
 // ---------- 事件绑定 ----------
 async function exportCurrentPDF() {
-  if (!state.currentFile || ['pdf','docx','audio','video','image','external'].includes(state.currentFile.kind)) return;
+  if (!state.currentFile || ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile.kind)) return;
   setStatus('正在整理 PDF 排版…');
   const result = await window.mdAPI.exportPDF({
     title: state.currentFile.name.replace(/\.(md|markdown|mdown|mkd)$/i, ''),

@@ -94,6 +94,21 @@ try {
   const afterRemove = await webdav.list('/');
   check('remove 删除成功', !afterRemove.some((i) => i.name === 'renamed.md'));
 
+  // Destination must also encode the connection's base directory, not only the filename.
+  const scoped='学习资料/课程 01';
+  await fsp.mkdir(path.join(root,scoped),{recursive:true});
+  for(const suffix of [scoped,scoped.split('/').map(encodeURIComponent).join('/')]){
+    await webdav.connect({url:base+suffix,username:'u',password:'p'});
+    await webdav.create('/原稿.smm','中文内容');
+    await webdav.rename('/原稿.smm','/新名称 #1.smm');
+    check('中文连接目录重命名（原始或已编码地址）',await webdav.read('/新名称 #1.smm')==='中文内容');
+    await webdav.copy('/新名称 #1.smm','/副本 100%.smm');
+    check('中文连接目录复制',await webdav.read('/副本 100%.smm')==='中文内容');
+    await webdav.mkdir('/子目录');
+    await webdav.rename('/副本 100%.smm','/子目录/移动.smm');
+    check('中文连接目录移动',await webdav.read('/子目录/移动.smm')==='中文内容');
+    await webdav.remove('/子目录');await webdav.remove('/新名称 #1.smm');
+  }
   await webdav.disconnect();
 
   // 未连接时报错

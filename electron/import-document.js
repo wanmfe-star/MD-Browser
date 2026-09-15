@@ -25,12 +25,16 @@ function decodeText(buffer) {
 async function convertDocument(filePath, { preserveDocx = false } = {}) {
   const ext = path.extname(filePath).toLowerCase();
   const mediaType = require('../shared/media-types').type(filePath);
-  if (!mediaType && !['.md', '.markdown', '.docx', '.doc', '.txt', '.text', '.pdf'].includes(ext)) throw new Error('请选择支持的文档、音乐、视频或图片文件');
+  if (!mediaType && !['.smm', '.mindmap', '.md', '.markdown', '.docx', '.doc', '.txt', '.text', '.pdf'].includes(ext)) throw new Error('请选择支持的文档、音乐、视频或图片文件');
   const stat = await fs.stat(filePath);
   const limit = mediaType ? 2 * 1024 * 1024 * 1024 : ext === '.pdf' ? 50 * 1024 * 1024 : MAX_BYTES;
   if (!stat.isFile() || stat.size > limit) throw new Error(mediaType ? '请选择不超过 2 GB 的媒体文件' : ext === '.pdf' ? '请选择不超过 50 MB 的 PDF' : '请选择不超过 20 MB 的文档');
   if (mediaType) return { name: path.basename(filePath), kind: mediaType.kind, media: true, sourcePath: filePath, warnings: [] };
   let buffer = await fs.readFile(filePath);
+  if (['.smm','.mindmap'].includes(ext)) {
+    const content=decodeText(buffer);const data=JSON.parse(content);if(!(data.root||data)?.data)throw Error('不是有效的思维导图文件');
+    return {name:path.basename(filePath),kind:'mindmap',content,warnings:[]};
+  }
   if (ext === '.pdf') {
     require('./pdf-file').validatePDF(buffer);
     return { name: path.basename(filePath), kind: 'pdf', bytes: new Uint8Array(buffer), warnings: [] };

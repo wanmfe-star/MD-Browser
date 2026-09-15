@@ -247,3 +247,6 @@ h1#docName{font-size:19px}
 .image-view #mediaMessage:empty{display:none}
 .image-view #mediaMessage{position:absolute;right:16px;bottom:54px;max-width:calc(100% - 32px);font-size:11px;text-shadow:0 0 3px white,0 0 6px white}
 .image-view .image-scroll{padding:12px}
+
+.text-drop-caret{position:fixed;width:2px;background:var(--accent);pointer-events:none;z-index:2147483647}
+.text-drop-caret[hidden]{display:none}

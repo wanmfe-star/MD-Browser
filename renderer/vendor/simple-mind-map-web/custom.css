@@ -1,0 +1,2 @@
+.navigatorContainer>.item:has(.el-select),.navigatorContainer>.item:has(.fullscreenContainer),.navigatorContainer>.item:has(.iconmoon_line),.navigatorContainer>.item:has(.iconlieri),.navigatorContainer>.item:has(.el-icon-more){display:none!important}
+.md-nav-button{border:0;background:transparent;color:inherit;white-space:nowrap;cursor:pointer;padding:6px 9px;font:inherit}.md-nav-button:hover{color:#409eff}

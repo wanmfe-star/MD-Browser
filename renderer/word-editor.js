@@ -270,5 +270,10 @@
     el('wordAddParagraph').disabled=value;el('wordSave').disabled=value||!dirty();
     el('wordUndo').disabled=value||!undoStack.length;el('wordRedo').disabled=value||!redoStack.length;syncToolbar();
   }
-  window.wordEditor={getZoom:()=>zoom,setZoom,load,save,dirty,setLocked,clear(){textSelection=[];bytes=null;blocks=[];originals.clear();saved='';undoStack=[];redoStack=[];selectedId=null;page.replaceChildren();}};
+  function insertDroppedText(range,text){
+    const node=(range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement).closest('.word-paragraph');
+    const block=blocks.find(b=>b.id===node?.dataset.id&&b.editable);if(locked||!block||!page.contains(node))return;
+    node.focus();selectedId=block.id;const selection=getSelection();selection.removeAllRanges();selection.addRange(range);replaceSelection(text);
+  }
+  window.wordEditor={insertDroppedText,getZoom:()=>zoom,setZoom,load,save,dirty,setLocked,clear(){textSelection=[];bytes=null;blocks=[];originals.clear();saved='';undoStack=[];redoStack=[];selectedId=null;page.replaceChildren();}};
 })();
