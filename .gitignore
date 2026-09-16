@@ -31,3 +31,8 @@ GPUCache/
 # Encrypted website password vault
 browser-passwords.enc
 browser-passwords.enc.tmp
+
+# Local AI credentials and conversation storage
+settings.enc
+settings.enc.tmp
+ai-history/

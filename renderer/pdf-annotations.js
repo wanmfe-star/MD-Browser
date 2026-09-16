@@ -24,7 +24,7 @@
     const quads=a.quads?.length?a.quads:[[a.rectPdf[0],a.rectPdf[3],a.rectPdf[2],a.rectPdf[3],a.rectPdf[0],a.rectPdf[1],a.rectPdf[2],a.rectPdf[1]]];
     return quads.map(q=>{const pts=[];for(let i=0;i<8;i+=2)pts.push(viewportNow.convertToViewportPoint(q[i],q[i+1]));const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return {x:Math.min(...xs)/viewportNow.width,y:Math.min(...ys)/viewportNow.height,w:(Math.max(...xs)-Math.min(...xs))/viewportNow.width,h:(Math.max(...ys)-Math.min(...ys))/viewportNow.height};});
   }
-  function popupMode(object){el('pdfDictionary').hidden=object || !window.dictionaryLookup?.canLookup(getSelection().toString());['pdfTextCopy','pdfTextHighlight','pdfTextUnderline'].forEach(id=>el(id).hidden=object);floating.querySelector('span').hidden=object;el('pdfDeleteAnnotation').hidden=!object;}
+  function popupMode(object){el('pdfDictionary').hidden=object || !window.dictionaryLookup?.canLookup(getSelection().toString());['pdfTextCopy','pdfTextAI','pdfTextHighlight','pdfTextUnderline'].forEach(id=>el(id).hidden=object);floating.querySelector('span').hidden=object;el('pdfDeleteAnnotation').hidden=!object;}
   function placePopup(anchor){
     const area=scroll.getBoundingClientRect();if(anchor.bottom<area.top || anchor.top>area.bottom){floating.hidden=true;return;}
     floating.hidden=false;const w=floating.offsetWidth,h=floating.offsetHeight;
@@ -60,6 +60,7 @@
     try {const result=await window.mdAPI.copyText(text);if(!result.ok)throw new Error(result.error);status('已复制所选文字');hideSelectionToolbar();}
     catch(error){status('复制失败：'+error.message);}
   };
+  el('pdfTextAI').onclick=()=>{restoreSelection();const text=getSelection().toString();hideSelectionToolbar();window.aiSelection?.(text);};
   el('pdfDictionary').onclick=()=>{restoreSelection();const text=getSelection().toString(),rect=floating.getBoundingClientRect();hideSelectionToolbar();window.dictionaryLookup.show(text,rect);};
   const native = a => a.tool === 'textHighlight' || a.tool === 'textUnderline';
   const fitText = () => {
@@ -166,6 +167,7 @@
         const content=await pdfPage.getTextContent();if(token!==generation)return;
         entry.textLayer.replaceChildren();entry.textLayer.style.setProperty('--scale-factor',viewport.scale);
         await new pdfjs.TextLayer({textContentSource:content,container:entry.textLayer,viewport}).render();if(token!==generation)return;
+        window.documentSearch?.paintPDF(entry.textLayer,entry.number);
         entry.renderedKey=key;entry.hasText=content.items.some(item=>item.str?.trim());
         bindPage(entry);fitText();
       }
@@ -286,7 +288,29 @@
       status('已保存到原文件');
     }finally{loading=false;controls();}
   }
-  window.pdfAnnotations={position(){const entry=pages[page-1];return {page,zoom,offset:entry?(scroll.getBoundingClientRect().top-entry.wrap.getBoundingClientRect().top)/Math.max(1,entry.wrap.offsetHeight):0};},async restorePosition(value){if(!documentPDF)return;await changeZoom(Number(value.zoom)||1);await goToPage(Number(value.page)||1);const entry=pages[page-1];if(entry)scroll.scrollTop+=entry.wrap.getBoundingClientRect().top-scroll.getBoundingClientRect().top+(Number(value.offset)||0)*entry.wrap.offsetHeight;queueScrollRender();},dirty,save,open:start,load(data){this.clear();bytes=new Uint8Array(data);expectedBytes=bytes.slice();},clear(){
+  async function extractText(){
+    if(!bytes)throw Error('PDF 尚未加载');
+    const snapshot=bytes.slice();
+    const library=await import('../node_modules/pdfjs-dist/build/pdf.mjs');
+    library.GlobalWorkerOptions.workerSrc=new URL('../node_modules/pdfjs-dist/build/pdf.worker.mjs',location.href).href;
+    const doc=await library.getDocument({data:snapshot,cMapUrl:new URL('../node_modules/pdfjs-dist/cmaps/',location.href).href,cMapPacked:true,standardFontDataUrl:new URL('../node_modules/pdfjs-dist/standard_fonts/',location.href).href}).promise;
+    try{let text='',blank=0;for(let i=1;i<=doc.numPages;i++){const page=await doc.getPage(i),content=await page.getTextContent();const value=content.items.map(item=>item.str+(item.hasEOL?'\n':' ')).join('').trim();if(!value)blank++;text+='[第 '+i+' 页]\n'+(value||'[该页无可提取文字，需要 OCR]')+'\n\n';if(text.length>500000)throw Error('文档超过 50 万字，请选取部分内容分析');}if(blank===doc.numPages)throw Error('该 PDF 没有可提取文字，需要先做 OCR 识别');return {text,warning:blank?blank+' 页没有文字层，未分析这些页面的图片内容':''};}finally{await doc.destroy();}
+  }
+  window.pdfAnnotations={
+    async searchIndex(){
+      if(!active)await start();
+      const doc=documentPDF,token=generation,result=[];
+      if(!doc)throw new Error('PDF text unavailable');
+      for(let n=1;n<=doc.numPages;n++){
+        const content=await (await doc.getPage(n)).getTextContent();
+        if(token!==generation)throw new Error('Document changed');
+        result.push({page:n,text:content.items.map(item=>item.str||'').join('')});
+      }
+      return result;
+    },
+    async searchPage(n){if(!active)await start();await goToPage(n);return pages[n-1]?.textLayer;},
+    searchLayers:()=>pages.filter(p=>p.renderedKey).map(p=>({page:p.number,root:p.textLayer})),
+    extractText,position(){const entry=pages[page-1];return {page,zoom,offset:entry?(scroll.getBoundingClientRect().top-entry.wrap.getBoundingClientRect().top)/Math.max(1,entry.wrap.offsetHeight):0};},async restorePosition(value){if(!documentPDF)return;await changeZoom(Number(value.zoom)||1);await goToPage(Number(value.page)||1);const entry=pages[page-1];if(entry)scroll.scrollTop+=entry.wrap.getBoundingClientRect().top-scroll.getBoundingClientRect().top+(Number(value.offset)||0)*entry.wrap.offsetHeight;queueScrollRender();},dirty,save,open:start,load(data){this.clear();bytes=new Uint8Array(data);expectedBytes=bytes.slice();},clear(){
     clearTimeout(scrollTimer);scroll.scrollTop=0;pages=[];layoutKey='';firstPage.viewport=null;firstPage.renderedKey='';scroll.replaceChildren(firstPage.wrap);firstPage.wrap.style.height='';bindPage(firstPage);
     hideSelectionToolbar();selecting=false;history=[];originalAnnotations=[];sourceRemoved='[]';expectedBytes=null;generation++;documentPDF?.destroy();documentPDF=null;bytes=null;actions=[];pending=null;active=false;savedActions='[]';page=1;zoom=1;el('pdfZoomFit').textContent='适宽';pageSizes.clear();viewportNow=null;textLayer.replaceChildren();
     el('pdfAnnotationPanel').hidden=true;el('pdfViewer').style.display='';el('pdfAnnotate').textContent='原版阅读器';

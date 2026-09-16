@@ -243,3 +243,20 @@ Markdown 编辑区默认自动换行，随窗口或分栏宽度调整；行号�
 验证：`pnpm run test:browser-passwords` 与 `pnpm run test:browser-passwords-ui`。自动测试使用虚拟网站和测试加密器，不读取真实钥匙串。参考 [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage) 与 [IPC 来源校验](https://www.electronjs.org/docs/latest/tutorial/security#17-validate-the-sender-of-all-ipc-messages)。
 
 概要线样式：在思维导图「基础样式 → 概要的连线」选择实线、虚线或点线，以及曲线、方括号或花括号。设置对当前导图的概要连线生效，随 `.smm` 保存，并保留在 SVG 导出中。旧文件默认使用实线曲线。
+
+
+### AI 助手（0.2.3）
+
+- 左侧底部「AI 助手」可独立聊天；折叠侧栏后从顶部星形图标打开。左下角齿轮可选择远程存储或 AI 设置。
+- DeepSeek 和火山引擎分别配置接口地址、模型、API Key，密钥通过系统安全存储加密到 userData/ai/settings.enc；渲染进程读取设置时仅返回是否已配置密钥。留空保留原密钥，清除选项删除密钥。更换接口地址时请确认是要使用的服务。
+- DeepSeek 默认接口 https://api.deepseek.com，默认模型 deepseek-flash；按账号开通情况修改。直接使用 Chat Completions 流式接口，DeepSeek 模型采用非思考模式。支持逐步显示、停止、复制、重新生成和连续追问。
+- Markdown/TXT、Word 与 PDF 的选中文字菜单有 AI 按钮。默认开启新的选文会话，也可选择加入上一会话。会话支持历史、重命名、删除和清空；关闭浮窗仅收起，后台继续生成。
+- 文档「··· → 用 AI 分析全文」或 AI 输入区的引用按钮添加全文，可追加另一栏文档（最多两份，合计最多50万字符）。添加引用不调用模型，点击发送才提交。MD/TXT、Word 使用当前编辑内容，包括未保存修改；PDF 按页提取文字层，无文字层的页面明确提示，不支持 OCR 或图像理解。文档修改后手动更新引用，原对话保留发送时的版本。
+- 单次直接分析上限24000字符，超过时分段提取与当前问题相关的笔记，再汇总回答。长历史自动压缩上下文，完整历史仍保存在本机。分段摘要可能损失细节，关键结论应回看原文核对；生成进度可查看并停止。
+- 历史及引用保存在 userData/ai 下独立 JSON 文件，API Key 单独加密，不保存到 NAS 或 Git 仓库。首次请求前需要用户自行填写有效密钥。接口调用及长文分段分析可能产生服务方费用。
+- 输入区「DeepSeek 联网」开关按需启用，复用 DeepSeek API Key，无需第三方搜索密钥。使用 DeepSeek 的 Anthropic 兼容接口及服务端 Web Search 工具，支持流式回答、来源链接、检索时间和历史保存；接口未返回实际检索记录时明确提示，关闭开关时仍走普通对话接口。官方说明：https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/#using-web-search-in-claude-code
+- Enter 发送，Shift+Enter 换行；中文输入法组词时按 Enter 不触发发送。提交成功后清空输入区的引用，历史消息保留当时的引用；提交失败时保留输入与引用，重新打开会话不会自动把旧引用加回输入区。
+- 火山图片接口已封装（ai:request 的 image 操作）：prompt、size、referenceImages → images/usage。使用 Ark /images/generations，模型或接入点 ID 由用户配置，保留水印。设置页仅鉴权测试，不生成付费图片；MD/Word 的生成图片和插入流程留待后续开发。
+- 验证：npm run test:ai、npm run test:ai-ui。测试使用本地模拟接口，不发送真实账号密钥或用户资料。
+
+接口依据：[DeepSeek Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/)、[DeepSeek 思考模式](https://api-docs.deepseek.com/guides/thinking_mode/)、[火山引擎图片生成](https://www.volcengine.com/docs/82379/1541523)。

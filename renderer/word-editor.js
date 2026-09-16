@@ -275,5 +275,5 @@
     const block=blocks.find(b=>b.id===node?.dataset.id&&b.editable);if(locked||!block||!page.contains(node))return;
     node.focus();selectedId=block.id;const selection=getSelection();selection.removeAllRanges();selection.addRange(range);replaceSelection(text);
   }
-  window.wordEditor={insertDroppedText,getZoom:()=>zoom,setZoom,load,save,dirty,setLocked,clear(){textSelection=[];bytes=null;blocks=[];originals.clear();saved='';undoStack=[];redoStack=[];selectedId=null;page.replaceChildren();}};
+  window.wordEditor={extractText:()=>blocks.map((b,i)=>'[段落 '+(i+1)+'] '+(b.rows?b.rows.map(row=>row.join(' | ')).join('\n'):b.text||'')).join('\n\n'),insertDroppedText,getZoom:()=>zoom,setZoom,load,save,dirty,setLocked,clear(){textSelection=[];bytes=null;blocks=[];originals.clear();saved='';undoStack=[];redoStack=[];selectedId=null;page.replaceChildren();}};
 })();

@@ -34,7 +34,7 @@
       data:JSON.parse(JSON.stringify(initial)),
       config:read('config',{}),local:read('local',{openNodeRichText:true,useLeftKeySelectionRightKeyDrag:true,isShowScrollbar:false,enableAi:false}),
       settings:(key,value)=>{if(valid())localStorage.setItem('mind-web-'+key,JSON.stringify(value));},
-      ready:instance=>{if(!valid())return;map=instance;clearTimeout(readyTimer);resolveReady?.();resolveReady=null;},
+      ready:instance=>{if(!valid())return;map=instance;frame.contentDocument.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='f'){event.preventDefault();event.stopImmediatePropagation();window.documentSearch?.show();}},true);clearTimeout(readyTimer);resolveReady?.();resolveReady=null;},
       changed:data=>{if(valid())changed(data);},
       save:()=>{if(valid()){changed();return runAction(save);}},
       create:data=>{if(valid())return runAction(()=>create(true,data?validate(JSON.parse(JSON.stringify(data))):null));},

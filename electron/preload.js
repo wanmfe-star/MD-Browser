@@ -4,6 +4,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('mdAPI', {
+  ai: (action,payload) => ipcRenderer.invoke('ai:request',action,payload),
+  onAI: callback => { const listener=(_event,value)=>callback(value);ipcRenderer.on('ai:event',listener);return ()=>ipcRenderer.removeListener('ai:event',listener); },
   browserPassword: (action, id) => ipcRenderer.invoke('browser:password', action, id),
   lookupCharacter: (text) => ipcRenderer.invoke('app:lookup-character', text),
   copyText: (text) => ipcRenderer.invoke('app:copy-text', text),

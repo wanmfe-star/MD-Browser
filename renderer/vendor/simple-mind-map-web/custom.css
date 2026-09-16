@@ -2,3 +2,9 @@
 .md-nav-button{border:0;background:transparent;color:inherit;white-space:nowrap;cursor:pointer;padding:6px 9px;font:inherit}.md-nav-button:hover{color:#409eff}
 
 .md-generalization-controls{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 20px}.md-generalization-controls label{display:flex;align-items:center;gap:8px;font-size:12px}.md-generalization-controls select{padding:5px 8px;border:1px solid #dcdfe6;border-radius:4px;background:transparent;color:inherit;font:inherit}
+
+/* Keep the original hit area while making the add-child icon less prominent. */
+.smm-quick-create-child-btn{cursor:pointer}
+.smm-quick-create-child-btn>circle{fill:transparent!important;pointer-events:all}
+.smm-quick-create-child-btn>svg{transform-box:fill-box;transform-origin:center;transform:scale(.72);opacity:.42;transition:opacity .15s ease}
+.smm-quick-create-child-btn:hover>svg{opacity:.85}

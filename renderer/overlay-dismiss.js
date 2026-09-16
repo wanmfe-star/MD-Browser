@@ -11,6 +11,7 @@
     }
     if (!target || !target.closest?.('.dictionary-card')) window.dictionaryLookup?.close();
     window.dismissMindPanels?.(target);
+    window.aiAssist?.dismiss?.(target);
   };
   function visit(surface, origin, target) {
     try {

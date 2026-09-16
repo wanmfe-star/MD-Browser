@@ -45,6 +45,9 @@ let mainWindow = null;
 const browserPasswords=require('./browser-passwords').install({ipcMain,dialog,app,safeStorage,getWindow:()=>mainWindow});
 const credentials = require('./credentials').createCredentialStore(app.getPath('userData'), safeStorage);
 
+const aiService=require('./ai-service').createService({directory:app.getPath('userData'),encryption:safeStorage,emit:event=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('ai:event',event);}});
+app.on('before-quit',()=>aiService.close());
+
 const configuredBrowserSessions = new WeakSet();
 let browserSession = null, browserStorageFlushed = false;
 app.on('before-quit', event => {
@@ -215,6 +218,8 @@ function handle(channel, fn) {
     }
   });
 }
+
+handle('ai:request',(action,payload)=>aiService.dispatch(action,payload));
 
 handle('webdav:connect', async (cfg) => {
   const root = await webdav.connect(cfg);

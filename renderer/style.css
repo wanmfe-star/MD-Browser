@@ -253,3 +253,13 @@ h1#docName{font-size:19px}
 
 body.sidebar-collapsed>.layout>.sidebar{display:none}
 .sidebar-collapsed #toggleSidebar .sidebar-toggle-arrow{transform:translateX(29px) scaleX(-1)}
+
+/* New-document actions are a popover, not part of the icon toolbar layout. */
+.new-document-menu{position:relative;flex:0 0 28px;width:28px;height:28px}
+.new-document-menu>summary{list-style:none;user-select:none;cursor:pointer}
+.new-document-menu>summary::-webkit-details-marker{display:none}
+.new-document-options{position:absolute;top:calc(100% + 6px);right:0;z-index:200;min-width:164px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 24px #25332d22}
+.new-document-menu:not([open])>.new-document-options{display:none}
+.new-document-options>button{display:block;width:100%;height:auto;padding:9px 12px;border:0;border-radius:5px;background:transparent;color:var(--text);font-size:13px;line-height:1.5;text-align:left;white-space:nowrap}
+.new-document-options>button:hover:not(:disabled){background:var(--soft);color:var(--accent)}
+.sidebar-heading>span{white-space:nowrap}

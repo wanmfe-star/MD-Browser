@@ -1,6 +1,6 @@
 (() => {
   const button=document.createElement('div');button.className='selection-copy selection-actions';button.setAttribute('role','toolbar');button.setAttribute('aria-label','选中文字操作');button.hidden=true;
-  const copy=document.createElement('button');copy.textContent='复制';const dictionary=document.createElement('button');dictionary.textContent='查字典';dictionary.hidden=true;button.append(copy,dictionary);document.body.append(button);
+  const copy=document.createElement('button');copy.textContent='复制';const dictionary=document.createElement('button');dictionary.textContent='查字典';dictionary.hidden=true;const ai=document.createElement('button');ai.textContent='AI';ai.onclick=()=>{const value=text;button.hidden=true;window.aiSelection?.(value);};button.append(copy,dictionary,ai);document.body.append(button);
   let text='',point=null;
   function selected(){
     if(document.activeElement===editorEl)return editorEl.value.slice(editorEl.selectionStart,editorEl.selectionEnd);

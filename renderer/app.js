@@ -316,6 +316,7 @@ $('openSystemFile').addEventListener('click', () => runAction(async () => {
 }));
 
 function releasePDF() {
+  window.documentSearch?.clear();
   window.readingProgress?.leave();
   window.browserPane?.hide();
   window.mediaViewer?.clear();
@@ -547,6 +548,7 @@ enableControlZoom(editorPane, () => editorFontSize, setEditorFontSize, 13);
 enableControlZoom(previewPane, () => previewFontSize, setPreviewFontSize, 14);
 
 function applyViewMode() {
+  Promise.resolve().then(()=>window.documentSearch?.sync());
   const pdf = state.currentFile?.kind === 'pdf', word = state.currentFile?.kind === 'docx', media = !!window.mediaTypes?.isKind(state.currentFile?.kind);
   const mindmap = state.currentFile?.kind === 'mindmap';
   if ($('mindMapPane')) $('mindMapPane').hidden = !mindmap;
