@@ -250,3 +250,6 @@ h1#docName{font-size:19px}
 
 .text-drop-caret{position:fixed;width:2px;background:var(--accent);pointer-events:none;z-index:2147483647}
 .text-drop-caret[hidden]{display:none}
+
+body.sidebar-collapsed>.layout>.sidebar{display:none}
+.sidebar-collapsed #toggleSidebar .sidebar-toggle-arrow{transform:translateX(29px) scaleX(-1)}

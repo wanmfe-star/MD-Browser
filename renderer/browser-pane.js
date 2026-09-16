@@ -1,7 +1,7 @@
 (() => {
   const pane=document.getElementById('primaryPane'),section=document.createElement('section');
   section.className='browser-pane';section.hidden=true;
-  section.innerHTML='<form class="browser-toolbar"><button type="button" data-action="back" title="后退" aria-label="后退">←</button><button type="button" data-action="forward" title="前进" aria-label="前进">→</button><button type="button" data-action="reload" title="刷新" aria-label="刷新">↻</button><input class="browser-address" aria-label="网页地址" placeholder="输入网址，例如 https://example.com" autocomplete="off"><button type="submit">访问</button><button type="button" data-action="external" title="用系统浏览器打开" aria-label="用系统浏览器打开">↗</button><button type="button" data-action="close" title="关闭网页（保留网站登录状态）" aria-label="关闭网页">×</button></form><div class="browser-message" role="status">输入网址开始浏览；切换文件后可点击地球图标返回。</div><div class="browser-stage"></div>';
+  section.innerHTML='<form class="browser-toolbar"><button type="button" data-action="back" title="后退" aria-label="后退">←</button><button type="button" data-action="forward" title="前进" aria-label="前进">→</button><button type="button" data-action="reload" title="刷新" aria-label="刷新">↻</button><input class="browser-address" aria-label="网页地址" placeholder="输入网址，例如 https://example.com" autocomplete="off"><button type="submit">访问</button><button type="button" data-action="password" title="保存、填充或管理网站密码" aria-label="网站密码">密码</button><button type="button" data-action="external" title="用系统浏览器打开" aria-label="用系统浏览器打开">↗</button><button type="button" data-action="close" title="关闭网页（保留网站登录状态）" aria-label="关闭网页">×</button></form><div class="browser-message" role="status">输入网址开始浏览；切换文件后可点击地球图标返回。</div><div class="browser-stage"></div>';
   pane.append(section);
   const address=section.querySelector('input'),message=section.querySelector('.browser-message'),stage=section.querySelector('.browser-stage');
   let guest=null,ready=false,url='',showing=false,opening=false;
@@ -39,6 +39,7 @@
   section.addEventListener('click',event=>{
     const action=event.target.closest('[data-action]')?.dataset.action;if(!action)return;
     if(action==='close'){guest?.remove();guest=null;ready=false;url='';address.value='';message.textContent='输入网址开始浏览；切换文件后可点击地球图标返回。';hide();window.paneClient.reset();return;}
+    if(action==='password'){window.mdAPI.browserPassword('menu',guest&&ready?guest.getWebContentsId():null).then(result=>{if(!result.ok)message.textContent=result.error;else if(result.data)message.textContent=result.data;}).catch(()=>message.textContent='密码操作失败，请重试');return;}
     if(!guest||!ready)return;
     if(action==='back'&&guest.canGoBack())guest.goBack();
     if(action==='forward'&&guest.canGoForward())guest.goForward();

@@ -42,6 +42,7 @@ if (process.env.MD_BROWSER_SMOKE) {
 }
 
 let mainWindow = null;
+const browserPasswords=require('./browser-passwords').install({ipcMain,dialog,app,safeStorage,getWindow:()=>mainWindow});
 const credentials = require('./credentials').createCredentialStore(app.getPath('userData'), safeStorage);
 
 const configuredBrowserSessions = new WeakSet();
@@ -82,6 +83,7 @@ function createWindow() {
     Object.assign(preferences, { nodeIntegration: false, nodeIntegrationInSubFrames: false, contextIsolation: true, sandbox: true, webSecurity: true, webviewTag: false });
   });
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    browserPasswords.attach(guest);
     const allowed = url => { try { return ['http:','https:'].includes(new URL(url).protocol); } catch { return false; } };
     for (const type of ['will-navigate','will-redirect']) guest.on(type, (event, url) => { if (!allowed(url)) event.preventDefault(); });
     guest.setWindowOpenHandler(({url}) => { if (allowed(url)) guest.loadURL(url).catch(()=>{}); return {action:'deny'}; });

@@ -233,3 +233,13 @@ Markdown 编辑区默认自动换行，随窗口或分栏宽度调整；行号�
 - 编辑器资源随客户端离线打包，无需打开官网；未加载官网统计脚本。主题、鼠标等偏好保存在本机。AI 默认关闭，若启用需自行配置兼容服务。
 - 源码来源、归档校验值与 MIT 许可证见 renderer/vendor/simple-mind-map-web/。这是完整开源 Web 界面，不包含上游闭源桌面版专属功能。
 - 集成测试：npm run test:mind-map，覆盖官方界面、双栏、主题保存、文字编辑、框选缩放、拖拽复制、新建导入和 WebDAV 保存。
+
+### 网站密码
+
+内嵌网页工具栏的「密码」提供填充、保存和管理入口。先在 HTTPS 登录页面填写账号和密码，再选择「保存当前密码」并确认；下次打开同一网站可点击「填充密码」选择账号，不自动登录。管理界面只列出网站和账号，支持删除单个账号或清除全部。密码不显示在应用界面，也不写入书签、日志或网盘。
+
+密码库保存在应用用户目录的 `browser-passwords.enc`，通过 Electron safeStorage 使用系统提供的加密保护，写入权限为 0600。系统加密不可用（包括 Linux basic_text 后端）时拒绝保存，不回退到明文。保存和填充仅支持 HTTPS 顶层页面，按完整 origin（协议、域名及端口）匹配；拒绝跨站表单、多个密码框、注册/改密框，操作中发生导航则取消填充。网页没有密码库 API；应用只在用户确认后将该站点的账号密码填入登录框，填入后的值可被该网站自己的脚本读取。不能防御已被入侵的系统或同源网站。跨域内嵌表单、分步登录及自定义输入组件可能需要手动登录。
+
+验证：`pnpm run test:browser-passwords` 与 `pnpm run test:browser-passwords-ui`。自动测试使用虚拟网站和测试加密器，不读取真实钥匙串。参考 [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage) 与 [IPC 来源校验](https://www.electronjs.org/docs/latest/tutorial/security#17-validate-the-sender-of-all-ipc-messages)。
+
+概要线样式：在思维导图「基础样式 → 概要的连线」选择实线、虚线或点线，以及曲线、方括号或花括号。设置对当前导图的概要连线生效，随 `.smm` 保存，并保留在 SVG 导出中。旧文件默认使用实线曲线。

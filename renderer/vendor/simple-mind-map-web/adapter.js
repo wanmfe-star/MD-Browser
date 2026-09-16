@@ -40,6 +40,7 @@ window.$bus.$on('app_inited',map=>{
     if(toolbar){toolbar.createNewLocalFile=()=>mdHost.create();toolbar.saveLocalFile=()=>{changed();mdHost.save();};toolbar.openLocalFile=()=>window.$bus.$emit('showImport');toolbar.openDirectory=()=>mdHost.browse();toolbar.$i18n.mergeLocaleMessage('zh',{toolbar:{saveAs:'保存'}});}
     window.$bus.$off('setData');window.$bus.$on('setData',data=>mdHost.create(data));
     map.resize();if(mdHost.data.view)map.view.setTransformData(mdHost.data.view);else map.view.fit();
+    window.installGeneralizationStyle(map,components);
     mdHost.ready(map);
   },0);
 });

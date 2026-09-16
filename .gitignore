@@ -27,3 +27,7 @@ GPUCache/
 # Vendored official mind-map runtime assets are required source dependencies.
 !renderer/vendor/simple-mind-map-web/dist/
 !renderer/vendor/simple-mind-map-web/dist/**
+
+# Encrypted website password vault
+browser-passwords.enc
+browser-passwords.enc.tmp
