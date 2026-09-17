@@ -263,3 +263,12 @@ body.sidebar-collapsed>.layout>.sidebar{display:none}
 .new-document-options>button{display:block;width:100%;height:auto;padding:9px 12px;border:0;border-radius:5px;background:transparent;color:var(--text);font-size:13px;line-height:1.5;text-align:left;white-space:nowrap}
 .new-document-options>button:hover:not(:disabled){background:var(--soft);color:var(--accent)}
 .sidebar-heading>span{white-space:nowrap}
+
+.file-row.drag-source{opacity:.45}
+.file-row.drop-target{background:#dfefe3;color:#286344;box-shadow:inset 0 0 0 2px #357352}
+
+.selection-copy.ai-selection-copy{z-index:6001}
+
+.section-tabs{display:flex;gap:5px;align-items:center;overflow-x:auto;flex-shrink:0;padding:7px 20px;border-bottom:1px solid var(--border);background:var(--bg)}
+.section-tabs[hidden]{display:none}.section-tabs button{flex-shrink:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 12px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;font-size:12px}
+.section-tabs button:hover{background:var(--soft)}.section-tabs button.active{background:#e4efe7;color:#286344}.section-tabs .section-add{font-size:18px;padding:1px 10px}

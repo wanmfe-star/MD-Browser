@@ -28,10 +28,12 @@ const state = {
   pdfUrl: null,
 };
 
+function documentText() { return window.sectionTabs?.text() ?? editorEl.value; }
+
 function isDirty() {
   if (state.currentFile?.kind === 'external' || window.mediaTypes?.isKind(state.currentFile?.kind)) return false;
   if (state.currentFile?.kind === 'docx') return !!window.wordEditor?.dirty();
-  return !!state.currentFile && state.currentFile.kind !== 'pdf' && editorEl.value !== state.savedContent;
+  return !!state.currentFile && state.currentFile.kind !== 'pdf' && documentText() !== state.savedContent;
 }
 
 async function canDiscard() {
@@ -48,6 +50,7 @@ async function canDiscard() {
 }
 
 function syncControls(action) {
+  window.sectionTabs?.sync();
   setConnUI(state.connected);
   connBtn.disabled = state.busy || state.connected;
   discBtn.disabled = state.busy || !state.connected;
@@ -230,7 +233,63 @@ function renderCrumb() {
 function fileIcon(folder) {
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + (folder ? 'M3 7V5h6l2 2h10v13H3Z' : 'M6 3h8l4 4v14H6Z M14 3v5h4 M9 12h6 M9 16h6') + '"/></svg>';
 }
+// Internal file moves use a private drag type so they cannot trigger uploads or text insertion.
+const fileMoveType = 'application/x-md-browser-file-move';
+let draggedFile = null;
+function clearFileMove() {
+  draggedFile = null;
+  filelistEl.querySelectorAll('.drag-source,.drop-target').forEach(row => row.classList.remove('drag-source', 'drop-target'));
+}
+function bindFileMove(button, item) {
+  const folder = item.type === 'directory';
+  if (!folder) {
+    button.draggable = true;
+    button.addEventListener('dragstart', event => {
+      if (!state.connected || state.busy || document.querySelector('dialog[open]')) { event.preventDefault(); return; }
+      clearFileMove();
+      draggedFile = { item, connection: state.connectionKey, directory: state.currentDir };
+      event.dataTransfer.clearData();
+      event.dataTransfer.setData(fileMoveType, item.path);
+      event.dataTransfer.effectAllowed = 'move';
+      button.classList.add('drag-source');
+    });
+    button.addEventListener('dragend', clearFileMove);
+    return;
+  }
+  const allowed = event => draggedFile && Array.from(event.dataTransfer?.types || []).includes(fileMoveType)
+    && state.connected && !state.busy && !document.querySelector('dialog[open]')
+    && draggedFile.connection === state.connectionKey && draggedFile.directory === state.currentDir
+    && state.entries.some(entry => entry.path === draggedFile.item.path && entry.type !== 'directory')
+    && state.entries.some(entry => entry.path === item.path && entry.type === 'directory');
+  for (const name of ['dragenter', 'dragover']) button.addEventListener(name, event => {
+    if (!allowed(event)) return;
+    event.preventDefault(); event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    button.classList.add('drop-target');
+  });
+  button.addEventListener('dragleave', event => {
+    if (!button.contains(event.relatedTarget)) button.classList.remove('drop-target');
+  });
+  button.addEventListener('drop', event => {
+    if (!allowed(event)) return;
+    event.preventDefault(); event.stopPropagation();
+    const source = draggedFile.item;
+    clearFileMove();
+    void runAction(() => relocateItem(source, joinPath(item.path, source.name)));
+  });
+}
+document.addEventListener('dragover', event => {
+  if (!Array.from(event.dataTransfer?.types || []).includes(fileMoveType)) return;
+  event.preventDefault(); event.dataTransfer.dropEffect = 'none';
+});
+document.addEventListener('drop', event => {
+  if (!Array.from(event.dataTransfer?.types || []).includes(fileMoveType)) return;
+  event.preventDefault(); clearFileMove();
+});
+document.addEventListener('dragend', clearFileMove);
+
 function renderList() {
+  clearFileMove();
   filelistEl.innerHTML = '';
   if (!state.connected) { filelistEl.innerHTML = '<li class="empty">尚未连接<br>连接后，你的文档会显示在这里</li>'; return; }
   if (state.currentDir !== '/') {
@@ -246,6 +305,7 @@ function renderList() {
     button.className = 'file-row' + ((window.workspace?.activeFile() || state.currentFile)?.path === item.path ? ' active' : '');
     button.innerHTML = fileIcon(folder) + '<span class="name">' + escapeHtml(item.name) + '</span>' + (folder ? '<span class="meta">›</span>' : /\.(smm|mindmap)$/i.test(item.name) ? '<span class="file-pdf-badge">导图</span>' : /\.pdf$/i.test(item.name) ? '<span class="file-pdf-badge">PDF</span>' : window.mediaTypes?.type(item.name) ? '<span class="file-pdf-badge">' + ({audio:'音乐',video:'视频',image:'图片'})[window.mediaTypes.type(item.name).kind] + '</span>' : '');
     button.title = item.name;
+    bindFileMove(button, item);
     button.addEventListener('contextmenu', e => { e.preventDefault(); runAction(() => showFileMenu(item)); });
     button.addEventListener('click', () => folder ? navigate(item.path) : runAction(() => openFile(item)));
     li.appendChild(button); filelistEl.appendChild(li);
@@ -283,6 +343,7 @@ async function openFile(item, discardApproved = false, local = false) {
   applyViewMode();
   state.savedContent = res.data;
   editorEl.value = content;
+  window.sectionTabs?.load();
   docNameEl.textContent = item.name;
   renderPreview();
   updateDirty();
@@ -316,6 +377,7 @@ $('openSystemFile').addEventListener('click', () => runAction(async () => {
 }));
 
 function releasePDF() {
+  window.sectionTabs?.clear();
   window.documentSearch?.clear();
   window.readingProgress?.leave();
   window.browserPane?.hide();
@@ -421,7 +483,7 @@ function persistDraft() {
   if (state.currentFile?.kind === 'docx') return false;
   if (!state.currentFile || state.currentFile.kind === 'pdf') return true;
   try {
-    if (isDirty()) localStorage.setItem(draftKey(), JSON.stringify({ content: editorEl.value, base: state.savedContent, updatedAt: Date.now() }));
+    if (isDirty()) localStorage.setItem(draftKey(), JSON.stringify({ content: documentText(), base: state.savedContent, updatedAt: Date.now() }));
     else localStorage.removeItem(draftKey());
     state.draftError = false;
     return true;
@@ -448,7 +510,7 @@ async function save() {
   clearTimeout(autoSaveTimer);
   if (!state.currentFile || !state.connected || !isDirty()) return;
   const file = state.currentFile;
-  const content = editorEl.value;
+  const content = documentText();
   persistDraft();
   state.saving = true; updateDirty();
   try {
@@ -962,7 +1024,7 @@ async function exportCurrentPDF() {
   setStatus('正在整理 PDF 排版…');
   const result = await window.mdAPI.exportPDF({
     title: state.currentFile.name.replace(/\.(md|markdown|mdown|mkd)$/i, ''),
-    html: window.sanitizeMarkdownHTML(marked.parse(editorEl.value)),
+    html: window.sanitizeMarkdownHTML(marked.parse(documentText())),
   });
   if (!result.ok) { setStatus('导出失败：' + result.error, 'error'); return; }
   if (!result.data) { setStatus('已取消导出'); return; }
