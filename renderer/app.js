@@ -617,6 +617,7 @@ function applyViewMode() {
   const external = state.currentFile?.kind === 'external';
   $('unsupportedPane').hidden = !external;
   $('mediaPane').hidden = !media;
+  $('primaryPane').classList.toggle('audio-view',state.currentFile?.kind === 'audio');
   $('primaryPane').classList.toggle('image-view',state.currentFile?.kind === 'image');
   $('wordPane').hidden = !word;
   $('markdownPanes').style.display = pdf || word || media || external || mindmap ? 'none' : '';
