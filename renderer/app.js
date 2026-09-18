@@ -21,6 +21,7 @@ const state = {
   savedContent: '',
   viewMode: 'split',
   busy: false,
+  editorLocked: false,
   connectionKey: '',
   saveError: false,
   saving: false,
@@ -49,7 +50,7 @@ async function canDiscard() {
   return res.ok && res.data === true;
 }
 
-function syncControls(action) {
+function syncControls() {
   window.sectionTabs?.sync();
   setConnUI(state.connected);
   connBtn.disabled = state.busy || state.connected;
@@ -58,29 +59,31 @@ function syncControls(action) {
   [newFileBtn, newDirBtn, refreshBtn].forEach(el => { el.disabled = state.busy || !state.connected; });
   if ($('newMindMap')) $('newMindMap').disabled = state.busy || !state.connected;
   if ($('emptyCreateMindMap')) $('emptyCreateMindMap').disabled = state.busy || !state.connected;
-  if ($('mindMapPane')) $('mindMapPane').inert = state.busy && action !== save;
+  if ($('mindMapPane')) $('mindMapPane').inert = state.editorLocked;
   const emptyCreate = $('emptyCreateMarkdown');
   if (emptyCreate) emptyCreate.disabled = state.busy || !state.connected;
   $('openSystemFile').disabled = state.busy || !state.connected || state.currentFile?.kind !== 'external';
   $('importFile').disabled = state.busy || !state.connected;
   $('exportPdf').disabled = state.busy || !state.currentFile || ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile.kind);
   [renameBtn, deleteBtn].forEach(el => { el.disabled = state.busy || !state.connected || !state.currentFile; });
-  editorEl.readOnly = !state.currentFile || ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile.kind) || (state.busy && action !== save);
+  editorEl.readOnly = !state.currentFile || ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile.kind) || (state.editorLocked);
   viewSeg.querySelectorAll('button').forEach(button => { button.disabled = ['pdf','docx','audio','video','image','external','mindmap'].includes(state.currentFile?.kind); });
   $('formatToolbar').querySelectorAll('button, select, input').forEach(button => { button.disabled = editorEl.readOnly; });
   window.wordEditor?.setLocked(state.busy || state.currentFile?.kind !== 'docx');
 }
 
-async function runAction(action) {
+async function runAction(action, { allowEditing = action === save || action === refreshDir } = {}) {
   if (state.busy) return;
   state.busy = true;
-  syncControls(action);
+  state.editorLocked = !allowEditing;
   try {
+    syncControls();
     await action();
   } catch (err) {
     setStatus('操作失败：' + (err.message || String(err)), 'error');
   } finally {
     state.busy = false;
+    state.editorLocked = false;
     syncControls();
     if (isDirty() && !state.saveError) scheduleSave();
   }
@@ -210,7 +213,7 @@ function navigate(dir) {
     state.entries = res.data;
     window.workspace?.sync();
     renderCrumb(); renderList();
-  });
+  }, { allowEditing: true });
 }
 
 function renderCrumb() {

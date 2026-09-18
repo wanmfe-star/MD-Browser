@@ -21,7 +21,7 @@
     adopt(data){state.connected=data.connected;state.connectionKey=data.connectionKey;state.currentDir=data.currentDir;state.entries=data.entries;setConnUI(state.connected);renderCrumb();renderList();syncControls();},
     async moved(from,to){if(state.currentFile&&containsPath(from,state.currentFile.path)){state.currentFile.path=to+state.currentFile.path.slice(from.length);state.currentFile.name=state.currentFile.path.split('/').pop();docNameEl.textContent=state.currentFile.name;if(window.mediaTypes?.isKind(state.currentFile.kind))await window.mediaViewer.relocated(from,to);persistDraft();}if(containsPath(from,state.currentDir))state.currentDir=to+normalizedPath(state.currentDir).slice(from.length);renderList();},
     deleted(from){if(state.currentFile&&containsPath(from,state.currentFile.path))this.reset();},
-    pause(){clearTimeout(autoSaveTimer);state.busy=true;syncControls();return ()=>{state.busy=false;syncControls();if(isDirty()&&!state.saveError)scheduleSave();};},
+    pause(){clearTimeout(autoSaveTimer);state.busy=true;state.editorLocked=true;syncControls();return ()=>{state.busy=false;state.editorLocked=false;syncControls();if(isDirty()&&!state.saveError)scheduleSave();};},
     save:()=>runAction(save),
   };
   if(window.isPaneChild){window.paneClient.reset();document.addEventListener('pointerdown',()=>parent.workspace.activate(id),true);document.addEventListener('focusin',()=>parent.workspace.activate(id));window.addEventListener('focus',()=>parent.workspace.activate(id));}

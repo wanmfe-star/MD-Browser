@@ -11,7 +11,7 @@
   function parse(){sections=markdownSections.split(full,s=>marked.lexer(s));}
   function paint(){
     bar.hidden=!eligible();bar.replaceChildren();if(bar.hidden)return;
-    const make=(label,index)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.title=label;b.className=index===active?'active':'';b.setAttribute('aria-pressed',String(index===active));b.disabled=state.busy;b.onclick=()=>select(index);bar.append(b);};
+    const make=(label,index)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.title=label;b.className=index===active?'active':'';b.setAttribute('aria-pressed',String(index===active));b.disabled=state.editorLocked;b.onclick=()=>select(index);bar.append(b);};
     make('全文',-1);sections.forEach((section,i)=>make(section.title,i));
     const add=document.createElement('button');add.type='button';add.className='section-add';add.textContent='＋';add.title='新增标签页';add.setAttribute('aria-label','新增标签页');add.disabled=state.busy;add.onclick=create;bar.append(add);
   }
@@ -21,7 +21,7 @@
     editorEl.scrollTop=0;previewEl.scrollTop=0;editorEl.setSelectionRange(0,0);paint();renderPreview();updateMetrics();window.documentSearch?.clear();
   }
   function select(index){
-    if(state.busy||!eligible()||owner!==state.currentFile)return;
+    if(state.editorLocked||!eligible()||owner!==state.currentFile)return;
     const position=index>=0?sections[index]?.start:null;
     // Rebuild section boundaries after edits, retaining the requested heading when possible.
     const oldEnd=end,delta=text().length-full.length;
