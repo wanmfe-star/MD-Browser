@@ -87,14 +87,11 @@ function createWindow() {
   });
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     browserPasswords.attach(guest);
-    const allowed = url => { try { return ['http:','https:'].includes(new URL(url).protocol); } catch { return false; } };
-    for (const type of ['will-navigate','will-redirect']) guest.on(type, (event, url) => { if (!allowed(url)) event.preventDefault(); });
-    guest.setWindowOpenHandler(({url}) => { if (allowed(url)) guest.loadURL(url).catch(()=>{}); return {action:'deny'}; });
+    require('./browser-windows').attachBrowserWindows(guest);
     browserSession = guest.session;
     if (configuredBrowserSessions.has(guest.session)) return;
     configuredBrowserSessions.add(guest.session);
-    guest.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-    guest.session.setPermissionCheckHandler(() => false);
+    require('./browser-permissions').configureBrowserPermissions(guest.session);
     guest.session.on('will-download', event => event.preventDefault());
   });
   mainWindow.setMenuBarVisibility(false);
@@ -253,6 +250,7 @@ handle('media:upload', async (target, source) => {
   } finally { stream?.destroy(); await file.close(); }
 });
 handle('app:open-system-file', require('./system-open').createSystemOpener(webdav, shell, path.join(app.getPath('temp'), 'md-browser-open')));
+handle('app:save-file-local', require('./save-local').createLocalSaver(webdav, options => dialog.showSaveDialog(mainWindow, options)));
 handle('media:open', target => media.open(target));
 handle('media:release', url => { media.release(url); return true; });
 app.on('before-quit', () => media.clear());
@@ -327,7 +325,7 @@ handle('app:file-menu', (folder) => new Promise(resolve => {
     ...(!folder ? [{label:'在左栏打开',click:()=>resolve('open-left')},{label:'在右栏打开',click:()=>resolve('open-right')}] : []),
     { type: 'separator' },
     { label: '重命名…', click: () => resolve('rename') },
-    ...(!folder ? [{ label: '复制…', click: () => resolve('copy') }] : []),
+    ...(!folder ? [{ label: '复制…', click: () => resolve('copy') }, { label: '保存到本地…', click: () => resolve('save-local') }] : []),
     { label: '移动到…', click: () => resolve('move') },
     { type: 'separator' },
     { label: folder ? '删除文件夹…' : '删除文件…', click: () => resolve('delete') },

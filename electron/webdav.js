@@ -93,6 +93,15 @@ function mediaReader(path) {
   });
 }
 
+async function fileDownloadReader(path) {
+  const selectedClient = getClient();
+  const item = await selectedClient.stat(path);
+  if (item.type !== 'file') throw new Error('只能保存文件，不能保存文件夹');
+  return ({ signal }) => selectedClient.customRequest(path, {
+    method: 'GET', signal, headers: { 'Accept-Encoding': 'identity' },
+  });
+}
+
 async function readBinary(path) {
   const data = await getClient().getFileContents(path, { format: 'binary' });
   return Buffer.from(data);
@@ -153,4 +162,4 @@ async function exists(path) {
   return getClient().exists(path);
 }
 
-module.exports = { connect, disconnect, list, read, readBinary, mediaReader, createMedia, writePDF, writeDocx, write, create, mkdir, remove, rename, copy, exists };
+module.exports = { connect, disconnect, list, read, readBinary, mediaReader, fileDownloadReader, createMedia, writePDF, writeDocx, write, create, mkdir, remove, rename, copy, exists };

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('mdAPI', {
   read: (p) => ipcRenderer.invoke('webdav:read', p),
   uploadMedia: (target, source) => ipcRenderer.invoke('media:upload', target, source),
   openSystemFile: (p) => ipcRenderer.invoke('app:open-system-file', p),
+  saveFileLocal: (p) => ipcRenderer.invoke('app:save-file-local', p),
   openMedia: (p) => ipcRenderer.invoke('media:open', p),
   releaseMedia: (url) => ipcRenderer.invoke('media:release', url),
   readWord: (p) => ipcRenderer.invoke('word:read', p),

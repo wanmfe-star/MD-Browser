@@ -4,7 +4,7 @@
   section.innerHTML='<form class="browser-toolbar"><button type="button" data-action="back" title="后退" aria-label="后退">←</button><button type="button" data-action="forward" title="前进" aria-label="前进">→</button><button type="button" data-action="reload" title="刷新" aria-label="刷新">↻</button><input class="browser-address" aria-label="网页地址" placeholder="输入网址，例如 https://example.com" autocomplete="off"><button type="submit">访问</button><button type="button" data-action="password" title="保存、填充或管理网站密码" aria-label="网站密码">密码</button><button type="button" data-action="external" title="用系统浏览器打开" aria-label="用系统浏览器打开">↗</button><button type="button" data-action="close" title="关闭网页（保留网站登录状态）" aria-label="关闭网页">×</button></form><div class="browser-message" role="status">输入网址开始浏览；切换文件后可点击地球图标返回。</div><div class="browser-stage"></div>';
   pane.append(section);
   const address=section.querySelector('input'),message=section.querySelector('.browser-message'),stage=section.querySelector('.browser-stage');
-  let guest=null,ready=false,url='',showing=false,opening=false;
+  let guest=null,ready=false,url='',showing=false,opening=false,lastWebsite='';
   const overlay=window.isPaneChild?parent.document.createElement('div'):null;
   if(overlay){overlay.className='browser-guest-overlay';overlay.hidden=true;parent.document.body.append(overlay);}
   function layout(){if(!overlay)return;overlay.hidden=!showing;if(!showing)return;const frame=window.frameElement.getBoundingClientRect(),rect=stage.getBoundingClientRect();Object.assign(overlay.style,{left:(frame.left+rect.left)+'px',top:(frame.top+rect.top)+'px',width:rect.width+'px',height:rect.height+'px'});}
@@ -19,12 +19,13 @@
     }finally{opening=false;}
   }
   const bookmarks=window.createBrowserBookmarks({section,current:()=>({url:ready&&guest?guest.getURL():address.value,title:ready&&guest?guest.getTitle():''}),navigate});
-  function update(){if(!guest||!ready)return;url=guest.getURL();bookmarks.update();if(document.activeElement!==address)address.value=url;section.querySelector('[data-action=back]').disabled=!guest.canGoBack();section.querySelector('[data-action=forward]').disabled=!guest.canGoForward();}
+  function update(){if(!guest||!ready)return;url=guest.getURL();try{const current=new URL(url);if(current.hostname==='accounts.google.com'){message.textContent='Google 通行密钥或第三方登录可能不支持内置浏览器。可尝试“Try another way”，或点击 ↗ 在系统浏览器重新登录（登录状态不与此处共享）。';}else if(['http:','https:'].includes(current.protocol)){if(!lastWebsite)lastWebsite=current.origin;if(message.textContent.startsWith('Google 通行密钥'))message.textContent='';}}catch{}bookmarks.update();if(document.activeElement!==address)address.value=url;section.querySelector('[data-action=back]').disabled=!guest.canGoBack();section.querySelector('[data-action=forward]').disabled=!guest.canGoForward();}
   function navigate(input){
     let target;try{const value=input.trim();target=new URL(/^[a-z][a-z\d+.-]*:/i.test(value)?value:'https://'+value);if(!['http:','https:'].includes(target.protocol)||target.username||target.password)throw Error();}catch{message.textContent='请输入有效的 HTTP 或 HTTPS 网页地址。';return;}
+    if(target.hostname!=='accounts.google.com')lastWebsite=target.origin;
     url=target.href;address.value=url;message.textContent='正在加载…';
     if(!guest){
-      ready=false;guest=(window.isPaneChild?parent.document:document).createElement('webview');guest.setAttribute('partition','persist:md-browser-web');guest.setAttribute('webpreferences','contextIsolation=yes,sandbox=yes,nodeIntegration=no');
+      ready=false;guest=(window.isPaneChild?parent.document:document).createElement('webview');guest.setAttribute('partition','persist:md-browser-web');guest.setAttribute('allowpopups','');guest.setAttribute('webpreferences','contextIsolation=yes,sandbox=yes,nodeIntegration=no');
       guest.addEventListener('dom-ready',()=>{ready=true;guest.setAudioMuted(!showing);update();});
       guest.addEventListener('focus',activate);
       guest.addEventListener('did-start-loading',()=>message.textContent='正在加载…');
@@ -38,13 +39,13 @@
   section.addEventListener('pointerdown',activate);
   section.addEventListener('click',event=>{
     const action=event.target.closest('[data-action]')?.dataset.action;if(!action)return;
-    if(action==='close'){guest?.remove();guest=null;ready=false;url='';address.value='';message.textContent='输入网址开始浏览；切换文件后可点击地球图标返回。';hide();window.paneClient.reset();return;}
+    if(action==='close'){guest?.remove();guest=null;ready=false;url='';lastWebsite='';address.value='';message.textContent='输入网址开始浏览；切换文件后可点击地球图标返回。';hide();window.paneClient.reset();return;}
     if(action==='password'){window.mdAPI.browserPassword('menu',guest&&ready?guest.getWebContentsId():null).then(result=>{if(!result.ok)message.textContent=result.error;else if(result.data)message.textContent=result.data;}).catch(()=>message.textContent='密码操作失败，请重试');return;}
     if(!guest||!ready)return;
     if(action==='back'&&guest.canGoBack())guest.goBack();
     if(action==='forward'&&guest.canGoForward())guest.goForward();
     if(action==='reload')guest.reload();
-    if(action==='external')window.mdAPI.openExternal(guest.getURL());
+    if(action==='external'){const current=guest.getURL();let target=current;try{if(new URL(current).hostname==='accounts.google.com')target=lastWebsite||'https://accounts.google.com/';}catch{}window.mdAPI.openExternal(target);}
   });
   window.browserPane={show,hide,layout,view:()=>guest,inspect:()=>({showing,url,retained:!!guest})};
 })();

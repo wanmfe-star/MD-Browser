@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {canWriteClipboard,configureBrowserPermissions}=require('../electron/browser-permissions');
+const page=(url,destroyed=false)=>({getURL:()=>url,isDestroyed:()=>destroyed});
+const contents=page('https://example.com/document');
+assert.equal(canWriteClipboard(contents,'clipboard-sanitized-write','https://example.com/'),true);
+for(const permission of ['clipboard-read','deprecated-sync-clipboard-read','media','geolocation','notifications'])assert.equal(canWriteClipboard(contents,permission,'https://example.com/'),false);
+assert.equal(canWriteClipboard(contents,'clipboard-sanitized-write','https://other.example/'),false);
+assert.equal(canWriteClipboard(null,'clipboard-sanitized-write','https://example.com/'),false);
+assert.equal(canWriteClipboard(page('https://example.com',true),'clipboard-sanitized-write','https://example.com/'),false);
+assert.equal(canWriteClipboard(page('http://example.com'),'clipboard-sanitized-write','http://example.com'),false);
+assert.equal(canWriteClipboard(page('file:///tmp/test'),'clipboard-sanitized-write','file:///tmp/test'),false);
+let check,request;configureBrowserPermissions({setPermissionCheckHandler:h=>check=h,setPermissionRequestHandler:h=>request=h});
+assert.equal(check(contents,'clipboard-sanitized-write','https://example.com'),true);
+request(contents,'clipboard-sanitized-write',result=>assert.equal(result,true),{requestingUrl:'https://example.com/document'});
+request(contents,'clipboard-read',result=>assert.equal(result,false),{requestingUrl:'https://example.com/document'});
+console.log('BROWSER_PERMISSIONS_OK');

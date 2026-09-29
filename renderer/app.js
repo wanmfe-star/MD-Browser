@@ -852,6 +852,13 @@ async function showFileMenu(item) {
   if (!choice.ok) { setStatus(choice.error, 'error'); return; }
   if (['open-left','open-right'].includes(choice.data)) { await (window.workspace||window.paneHost).open(item,choice.data==='open-left'?'left':'right',!window.isPaneChild); return; }
   if (choice.data === 'copy') await copyItem(item);
+  if (choice.data === 'save-local' && item.type === 'file') {
+    setStatus('正在保存到本地：' + item.name);
+    const result = await window.mdAPI.saveFileLocal(item.path);
+    if (!result.ok) setStatus('保存到本地失败：' + result.error, 'error');
+    else if (result.data) setStatus('已保存到本地：' + result.data, 'ok');
+    else setStatus('已取消保存到本地');
+  }
   if (choice.data === 'rename') await renameItem(item);
   if (choice.data === 'delete') await deleteItem(item);
   if (choice.data === 'move') {
