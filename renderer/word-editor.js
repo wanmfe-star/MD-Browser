@@ -1,6 +1,22 @@
 (() => {
   const el = id => document.getElementById(id);
   const page = el('wordPage'), pane = el('wordPane');
+  const colorKey = 'md-browser.word.last-color', defaultColor = '#26352d';
+  const validColor = value => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
+  function readColor() {
+    try { const value=localStorage.getItem(colorKey);return validColor(value)?value.toLowerCase():defaultColor; }
+    catch { return defaultColor; }
+  }
+  let lastColor = readColor();
+  function syncColor() {
+    el('wordColor').value=lastColor;
+    el('wordColor').title='选择字体颜色 · 上次使用 '+lastColor;
+    el('wordApplyColor').style.textDecorationColor=lastColor;
+    el('wordApplyColor').title='应用上次使用的颜色 '+lastColor;
+    el('wordApplyColor').setAttribute('aria-label','应用字体颜色 '+lastColor);
+  }
+  syncColor();
+  window.addEventListener('storage',event=>{if(event.key===colorKey||event.key===null){lastColor=readColor();syncColor();}});
   let zoom = 1;
   const scroll = el('wordScroll');
   function setZoom(value, offset = scroll.clientHeight / 2) {
@@ -188,7 +204,7 @@
     const list=selectedRuns(),enabled=!locked&&list.length>0;
     el('wordToolbar').querySelectorAll('[data-text-format]').forEach(n=>n.disabled=!enabled);
     const common=key=>list.length&&list.every(r=>r[key]===list[0][key])?list[0][key]:null;
-    el('wordFont').value=common('font')||'';el('wordSize').value=common('size')||'';el('wordColor').value=common('color')||'#26352d';
+    el('wordFont').value=common('font')||'';el('wordSize').value=common('size')||'';syncColor();
     for(const [id,key] of [['wordBold','bold'],['wordItalic','italic'],['wordUnderline','underline'],['wordStrike','strike']]){const on=!!common(key);el(id).classList.toggle('active',on);el(id).setAttribute('aria-pressed',String(on));}
   }
   function restoreTextSelection(selection) {
@@ -212,7 +228,14 @@
   el('wordToolbar').addEventListener('mousedown',()=>captureTextSelection());
   el('wordFont').onchange=event=>{if(event.target.value)formatText({font:event.target.value});};
   el('wordSize').onchange=event=>{const size=Number(event.target.value);if(size<6||size>96||!Number.isInteger(size*2)){setStatus('字号须为 6–96 磅，支持半磅','error');syncTextToolbar();return;}formatText({size});};
-  el('wordColor').onchange=event=>formatText({color:event.target.value});
+  function applyColor(value) {
+    if(locked||!targets().length||!validColor(value))return;
+    lastColor=value.toLowerCase();
+    formatText({color:lastColor});
+    try { localStorage.setItem(colorKey,lastColor); } catch { /* Keep the color for this session if storage is unavailable. */ }
+  }
+  el('wordColor').onchange=event=>applyColor(event.target.value);
+  el('wordApplyColor').onclick=()=>applyColor(lastColor);
   for(const [id,key] of [['wordBold','bold'],['wordItalic','italic'],['wordUnderline','underline'],['wordStrike','strike']])el(id).onclick=()=>formatText({[key]:!selectedRuns().every(r=>r[key])});
   page.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&!event.altKey&&['b','i','u'].includes(event.key.toLowerCase())){event.preventDefault();captureTextSelection();const key={b:'bold',i:'italic',u:'underline'}[event.key.toLowerCase()];formatText({[key]:!selectedRuns().every(r=>r[key])});}});
   el('wordAlign').onchange=event=>format({align:event.target.value});

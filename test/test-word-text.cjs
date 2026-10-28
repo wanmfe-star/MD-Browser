@@ -13,7 +13,9 @@ app.whenReady().then(async()=>{
  await js('state.currentFile={path:"/sample.docx",name:"sample.docx",kind:"docx"};applyViewMode();wordEditor.setLocked(false);wordEditor.load('+JSON.stringify({bytes:Array.from(original),model})+')');
  async function select(start,end,first=0,last=first){await js('(()=>{const nodes=document.querySelectorAll(".word-paragraph");function point(node,offset){const w=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(offset<=n.length)return [n,offset];offset-=n.length;}return [node,node.childNodes.length];}nodes['+first+'].focus();const r=document.createRange();r.setStart(...point(nodes['+first+'],'+start+'));r.setEnd(...point(nodes['+last+'],'+end+'));getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event("selectionchange"));})()');}
  const change=(id,value)=>js('$('+JSON.stringify(id)+').value='+JSON.stringify(value)+';$('+JSON.stringify(id)+').dispatchEvent(new Event("change"))');
- await select(6,11);await change('wordColor','#cc2244');await change('wordSize','24');await change('wordFont','Arial');await js('$("wordBold").click();$("wordUnderline").click();$("wordStrike").click()');
+ await select(6,11);await change('wordColor','#cc2244');
+ await select(0,5);assert.equal(await js('$("wordColor").value'),'#cc2244','last chosen color must survive selecting uncolored text');
+ await select(6,11);await change('wordSize','24');await change('wordFont','Arial');await js('$("wordBold").click();$("wordUnderline").click();$("wordStrike").click()');
  assert.equal(await js('getSelection().toString()'),'world','toolbar preserves selection');
  assert.equal(await js('document.querySelector(".word-paragraph").firstChild.style.color'),'','unselected prefix remains unchanged');
  await js('$("wordUndo").click()');await select(6,11);assert.equal(await js('$("wordStrike").getAttribute("aria-pressed")'),'false');await js('$("wordRedo").click()');
@@ -32,6 +34,18 @@ app.whenReady().then(async()=>{
  const JSZip=require('jszip'),oldZip=await JSZip.loadAsync(original),nextZip=await JSZip.loadAsync(saved);
  for(const name of ['word/styles.xml','word/header1.xml','word/media/image.png'])assert.deepEqual(await nextZip.file(name).async('nodebuffer'),await oldZip.file(name).async('nodebuffer'));
  assert.equal(doc.protectedCount,2);
+ // Selecting or loading a document must not replace the reusable color or recolor text.
+ const loadOriginal='state.currentFile={path:"/original.docx",name:"original.docx",kind:"docx"};applyViewMode();wordEditor.setLocked(false);wordEditor.load('+JSON.stringify({bytes:Array.from(original),model})+')';
+ await js('wordEditor.clear();'+loadOriginal);await select(0,5);
+ assert.equal(await js('$("wordColor").value'),'#008844');assert.equal(await js('wordEditor.dirty()'),false);
+ await js('$("wordApplyColor").dispatchEvent(new MouseEvent("mousedown",{bubbles:true,cancelable:true}));$("wordApplyColor").click()');
+ assert.equal(await js('getSelection().toString()'),'Hello');
+ await js('wordEditor.save()');doc=await inspectDocx(saved);
+ assert.equal(doc.blocks[0].runs[0].color.toLowerCase(),'#008844');assert.equal(doc.blocks[0].runs.find(r=>r.text===' ').color,null,'reusing a color must leave unselected text unchanged');
+ await js('$("wordUndo").click();$("wordRedo").click()');assert.equal(await js('$("wordColor").value'),'#008844');
+ const reloaded=new Promise(resolve=>win.webContents.once('did-finish-load',resolve));win.webContents.reload();await reloaded;
+ await js(loadOriginal);await select(0,5);assert.equal(await js('$("wordColor").value'),'#008844','color survives renderer restart');assert.equal(await js('wordEditor.dirty()'),false);
+
  await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await fs.writeFile(path.join(__dirname,'../.electron-cache/word-text-format.png'),(await win.webContents.capturePage()).toPNG());
  console.log('Word text formatting passed: partial selection, font/color/size and emphasis, undo/redo, typing preserves styles, multi-paragraph ranges, whole paragraph fallback, DOCX roundtrip and protected package preservation');
  clearTimeout(timeout);app.exit(0);
