@@ -33,6 +33,7 @@ function textOf(node) { return all(node, 'r').map(runText).join(''); }
 function editable(p) {
   return p.localName === 'p' && !all(p, 'sectPr').length && !all(p, 'numPr').length && children(p).every(n => n.localName === 'pPr' || (n.localName === 'r' && children(n).every(r => ['rPr','t','tab','br','cr'].includes(r.localName) && !(r.localName === 'br' && attr(r, 'type') && attr(r, 'type') !== 'textWrapping'))));
 }
+function styleEditable(node) { return node.localName==='p' && textOf(node).length>0; }
 function formatOf(p) {
   const props = child(p, 'pPr'), spacing = child(props, 'spacing'), indent = child(props, 'ind');
   const align = val(props, 'jc');
@@ -58,6 +59,8 @@ async function inspectDocx(bytes) {
     const block = { id:'b'+i, editable:editable(node), text:textOf(node), format:formatOf(node), runs:children(node).filter(n=>n.localName==='r').map(r=>({text:runText(r),...runStyle(r)})) };
     if (!block.editable) {
       block.kind = node.localName === 'tbl' ? 'table' : 'protected';
+      block.styleEditable = styleEditable(node);
+      if(block.styleEditable)block.runs=all(node,'r').filter(r=>runText(r).length).map(r=>({text:runText(r),...runStyle(r)}));
       if (block.kind === 'table') block.rows = children(node).filter(n=>n.localName==='tr').map(row=>children(row).filter(n=>n.localName==='tc').map(cell=>all(cell,'p').map(textOf).join('\n')));
       block.images = [];
       for (const blip of Array.from(node.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','blip'))) {
@@ -149,6 +152,33 @@ function replaceRuns(p, block, byId) {
   for(const r of children(p).filter(n=>n.localName==='r'))p.removeChild(r);
   for(const r of result)p.appendChild(r);
 }
+// Only change run properties in complex paragraphs. Keep wrappers, fields, objects and paragraph properties.
+function styleComplexParagraph(p, block) {
+  const text=textOf(p);
+  if(block.text!==text||!Array.isArray(block.runs)||block.runs.length>20000||block.runs.some(r=>!r||typeof r.text!=='string')||block.runs.map(r=>r.text).join('')!==text)throw new Error('复杂段落仅支持修改文字样式，不能替换文字或结构');
+  const segments=[];let offset=0;
+  for(const r of block.runs){const values=r.overrides||{};setRunStyle(p.ownerDocument.createElementNS(W,'w:r'),values);if(r.text.length)segments.push({start:offset,end:offset+r.text.length,values,key:JSON.stringify(values)});offset+=r.text.length;}
+  if(!segments.some(s=>Object.keys(s.values).length))return;
+  // Record offsets before splitting, and process nested runs first so their XML is retained once.
+  offset=0;const originals=all(p,'r').map(node=>{const entry={node,start:offset,length:runText(node).length};offset+=entry.length;return entry;});
+  const segmentAt=at=>{let low=0,high=segments.length-1;while(low<high){const middle=(low+high)>>1;if(segments[middle].end<=at)low=middle+1;else high=middle;}return segments[low];};
+  for(const entry of originals.reverse()){
+    if(!entry.length)continue;
+    const node=entry.node,props=child(node,'rPr'),pieces=[];let at=entry.start,piece,key;
+    const ensurePiece=style=>{if(!piece||key!==style.key){piece=node.cloneNode(false);if(props)piece.appendChild(props.cloneNode(true));setRunStyle(piece,style.values);pieces.push(piece);key=style.key;}return piece;};
+    for(const atom of Array.from(node.childNodes)){
+      if(atom===props)continue;
+      const isText=atom.namespaceURI===W&&atom.localName==='t',isChar=atom.namespaceURI===W&&['tab','br','cr'].includes(atom.localName);
+      if(isText){
+        const value=atom.textContent;let pos=0;
+        while(pos<value.length){const style=segmentAt(at),length=Math.min(value.length-pos,style.end-at),part=atom.cloneNode(false);part.setAttribute('xml:space','preserve');part.appendChild(p.ownerDocument.createTextNode(value.slice(pos,pos+length)));ensurePiece(style).appendChild(part);pos+=length;at+=length;}
+        if(!value)ensurePiece(segmentAt(Math.min(at,entry.start+entry.length-1))).appendChild(atom.cloneNode(true));
+      }else{ensurePiece(segmentAt(Math.min(at,entry.start+entry.length-1))).appendChild(atom.cloneNode(true));if(isChar)at++;}
+    }
+    for(const replacement of pieces)node.parentNode.insertBefore(replacement,node);
+    node.parentNode.removeChild(node);
+  }
+}
 function setFormat(p,format,previous) {
   for(const key of ['align','line','before','after','indent']) {
     if(format[key]===previous[key])continue;
@@ -173,7 +203,10 @@ async function editDocx(bytes, blocks) {
     if(typeof block.id!=='string'||seen.has(block.id))throw new Error('段落标识重复');seen.add(block.id);
     const original=byId.get(block.id);
     if(original && original.localName==='sectPr')throw new Error('不能编辑分节设置');
-    if(original&&!editable(original)){next.push(original);continue;}
+    if(original&&!editable(original)){
+      if(styleEditable(original)){const node=original.cloneNode(true);styleComplexParagraph(node,block);next.push(node);}else next.push(original);
+      continue;
+    }
     if(!original&&!block.id.startsWith('new-'))throw new Error('未知段落');
     if(typeof block.text!=='string'||block.text.length>1000000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(block.text))throw new Error('无效的段落文字');
     let node;

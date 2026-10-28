@@ -1,6 +1,6 @@
 {
   "name": "md-browser",
-  "version": "0.2.14",
+  "version": "0.2.17",
   "description": "连接 WebDAV 的文档编辑与多媒体浏览客户端",
   "main": "electron/main.js",
   "scripts": {
@@ -44,7 +44,9 @@
     "test:ai-ui": "electron test/test-ai-ui.cjs",
     "test:document-search": "electron test/test-document-search.cjs",
     "test:ai-deepseek": "node test/test-ai-deepseek.cjs",
-    "test:editor-lock": "electron test/test-editor-lock.cjs"
+    "test:editor-lock": "electron test/test-editor-lock.cjs",
+    "test:word-selection": "electron test/test-word-selection.cjs",
+    "test:word-complex": "node test/test-docx-complex.cjs"
   },
   "license": "MIT",
   "dependencies": {

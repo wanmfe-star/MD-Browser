@@ -36,11 +36,14 @@
   el('wordZoomReset').onclick = () => setZoom(1);
   let bytes, blocks = [], originals = new Map(), saved = '', selectedId = null, locked = false;
   const runs = window.wordRuns;
-  let textSelection = [], inputEdit = null;
+  let textSelection = [], inputEdit = null, defaultNotice = '';
   let undoStack = [], redoStack = [], composing = false;
   const snapshot = () => JSON.stringify(blocks.map(b => ({ id:b.id, sourceId:b.sourceId, text:b.text, format:b.format, runs:b.runs, richText:b.editable })));
   const dirty = () => !!bytes && snapshot() !== saved;
   const current = () => blocks.find(b => b.id === selectedId && b.editable);
+  const canStyle = block => block && (block.editable || block.styleEditable);
+  const currentStyled = () => blocks.find(b => b.id === selectedId && canStyle(b));
+  const textRoot = node => node.querySelector('.word-style-content') || node;
   function remember() { undoStack.push(snapshot()); if(undoStack.length>100)undoStack.shift();redoStack=[]; }
   function changed() {
     state.saveError = false; updateDirty();
@@ -69,6 +72,10 @@
       el('wordIndent').classList.toggle('active',b.format.indent>0);
     }
   }
+  function clearEditingTarget(message = '') {
+    selectedId=null;textSelection=[];
+    el('wordNotice').textContent=message||defaultNotice;
+  }
   function focusParagraph(id, offset=0) {
     selectedId=id;
     const node=Array.from(page.children).find(n=>n.dataset.id===id);
@@ -81,6 +88,15 @@
     if(text)range.setStart(text,remaining);else {range.selectNodeContents(node);range.collapse(false);}
     range.collapse(true);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);syncToolbar();
   }
+  function appendRuns(node,b) {
+    for(const run of b.runs || [{text:b.text}]) {
+      const span=document.createElement('span');span.textContent=run.text;
+      if(run.bold)span.style.fontWeight='bold';if(run.italic)span.style.fontStyle='italic';
+      span.style.textDecoration=[run.underline?'underline':'',run.strike?'line-through':''].join(' ');
+      if(run.size)span.style.fontSize=run.size+'pt';if(run.color)span.style.color=run.color;if(run.font)span.style.fontFamily=run.font;
+      node.appendChild(span);
+    }
+  }
   function render(focusId,offset) {
     const top=el('wordScroll').scrollTop;
     page.replaceChildren();
@@ -89,19 +105,14 @@
       if(b.editable) {
         node.className='word-paragraph';node.contentEditable=locked?'false':'plaintext-only';node.spellcheck=false;
         node.setAttribute('aria-label','可编辑段落');formatNode(node,b.format);
-        for(const run of b.runs || [{text:b.text}]) {
-          const span=document.createElement('span');span.textContent=run.text;
-          if(run.bold)span.style.fontWeight='bold';if(run.italic)span.style.fontStyle='italic';
-          span.style.textDecoration=[run.underline?'underline':'',run.strike?'line-through':''].join(' ');
-          if(run.size)span.style.fontSize=run.size+'pt';if(run.color)span.style.color=run.color;if(run.font)span.style.fontFamily=run.font;
-          node.appendChild(span);
-        }
+        appendRuns(node,b);
         if(!b.text)node.appendChild(document.createElement('br'));
       } else {
         node.className='word-protected';node.contentEditable='false';
-        const label=document.createElement('small');label.textContent=b.kind==='table'?'表格 · 保留原内容':'复杂内容 · 保留原内容';node.appendChild(label);
+        node.setAttribute('aria-readonly','true');
+        const label=document.createElement('small');label.textContent=b.styleEditable?'复杂段落 · 可修改文字样式，保留原结构':b.kind==='table'?'表格 · 只读，保留原内容':'复杂内容 · 只读，保留原内容';node.appendChild(label);
         if(b.rows) { const table=document.createElement('table');for(const row of b.rows){const tr=table.insertRow();for(const text of row)tr.insertCell().textContent=text;}node.appendChild(table); }
-        else {const p=document.createElement('p');p.textContent=b.text;node.appendChild(p);}
+        else {const p=document.createElement('p');if(b.styleEditable){p.className='word-style-content';formatNode(p,b.format);appendRuns(p,b);}else p.textContent=b.text;node.appendChild(p);}
         for(const src of b.images||[]){const img=document.createElement('img');img.src=src;img.alt='Word 原文图片';node.appendChild(img);}
       }
       page.appendChild(node);
@@ -136,7 +147,8 @@
     blocks.splice(blocks.indexOf(b)+1,0,...inserted);
     render(last.id,last.text.length-suffix.length);changed();
   }
-  page.addEventListener('focusin',event=>{const node=event.target.closest('.word-paragraph');if(node){if(selectedId!==node.dataset.id)textSelection=[];selectedId=node.dataset.id;syncToolbar();}});
+  page.addEventListener('focusin',event=>{const node=event.target.closest('.word-paragraph');if(node){if(selectedId!==node.dataset.id)textSelection=[];selectedId=node.dataset.id;el('wordNotice').textContent=defaultNotice;syncToolbar();}});
+  page.addEventListener('pointerdown',event=>{if(event.target.closest('.word-protected')){clearEditingTarget(event.target.closest('.word-style-content')?'此段落支持选中文字修改颜色、字体、字号等样式，原有结构会被保留。':'此区域暂不支持编辑或设置格式；可以选中文字复制。');syncToolbar();}});
   page.addEventListener('compositionstart',()=>{composing=true;});
   page.addEventListener('compositionend',()=>{composing=false;const node=Array.from(page.children).find(n=>n.dataset.id===selectedId),pos=node&&offsets(node);render(selectedId,pos?.end||0);});
   page.addEventListener('beforeinput',event=>{
@@ -180,24 +192,32 @@
     const node=Array.from(page.children).find(n=>n.dataset.id===b.id);formatNode(node,b.format);syncToolbar();changed();
   }
   function captureTextSelection() {
-    const selection=getSelection();if(!selection.rangeCount)return;
+    const selection=getSelection();if(!selection.rangeCount){if(!el('wordToolbar').contains(document.activeElement))clearEditingTarget();return;}
     const range=selection.getRangeAt(0);
-    if(!page.contains(range.startContainer)||!page.contains(range.endContainer))return;
+    if(!page.contains(range.startContainer)||!page.contains(range.endContainer)){
+      // Toolbar controls temporarily take focus while retaining the captured document range.
+      if(!el('wordToolbar').contains(document.activeElement))clearEditingTarget();
+      return;
+    }
     const captured=[];
     for(const node of page.children){
-      const block=blocks.find(b=>b.id===node.dataset.id);if(!block?.editable||!range.intersectsNode(node))continue;
+      const block=blocks.find(b=>b.id===node.dataset.id);if(!block||!range.intersectsNode(node))continue;
+      if(!canStyle(block)){clearEditingTarget('所选内容包含表格或不可编辑对象，请只选择需要设置样式的段落文字。');return;}
+      const content=textRoot(node);if(!range.intersectsNode(content))continue;
       const part=range.cloneRange();
-      if(!node.contains(range.startContainer))part.setStart(node,0);
-      if(!node.contains(range.endContainer))part.setEnd(node,node.childNodes.length);
-      const before=document.createRange();before.selectNodeContents(node);before.setEnd(part.startContainer,part.startOffset);
+      if(!content.contains(range.startContainer))part.setStart(content,0);
+      if(!content.contains(range.endContainer))part.setEnd(content,content.childNodes.length);
+      if(part.collapsed&&!range.collapsed)continue;
+      const before=document.createRange();before.selectNodeContents(content);before.setEnd(part.startContainer,part.startOffset);
       captured.push({id:block.id,start:before.toString().length,end:before.toString().length+part.toString().length});
     }
     textSelection=captured;
-    if(captured.length)selectedId=captured[0].id;
+    selectedId=captured[0]?.id??null;
+    el('wordNotice').textContent=currentStyled()?.styleEditable?'此段落支持文字样式修改；文字内容、编号、超链接和对象结构保留。':defaultNotice;
   }
   function targets() {
-    const selected=textSelection.filter(r=>r.end>r.start&&blocks.some(b=>b.id===r.id&&b.editable));
-    return selected.length?selected:current()?[{id:current().id,start:0,end:current().text.length}]:[];
+    const selected=textSelection.filter(r=>r.end>r.start&&blocks.some(b=>b.id===r.id&&canStyle(b)));
+    return selected.length?selected:currentStyled()?[{id:currentStyled().id,start:0,end:currentStyled().text.length}]:[];
   }
   function selectedRuns() { return targets().flatMap(r=>runs.slice(blocks.find(b=>b.id===r.id).runs,r.start,r.end)); }
   function syncTextToolbar() {
@@ -210,13 +230,13 @@
   function restoreTextSelection(selection) {
     if(!selection.length)return;
     function point(record,end) {
-      const node=[...page.children].find(n=>n.dataset.id===record.id);if(!node)return;
+      const wrapper=[...page.children].find(n=>n.dataset.id===record.id);if(!wrapper)return;const node=textRoot(wrapper);
       let offset=end?record.end:record.start;const walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);let text;
       while((text=walker.nextNode())){if(offset<=text.length)return [text,offset];offset-=text.length;}
       return [node,node.childNodes.length];
     }
     const start=point(selection[0],false),end=point(selection.at(-1),true);if(!start||!end)return;
-    const range=document.createRange();range.setStart(...start);range.setEnd(...end);const currentSelection=getSelection();currentSelection.removeAllRanges();currentSelection.addRange(range);textSelection=selection;
+    const range=document.createRange();range.setStart(...start);range.setEnd(...end);const currentSelection=getSelection();currentSelection.removeAllRanges();currentSelection.addRange(range);textSelection=selection;selectedId=selection[0].id;
   }
   function formatText(values) {
     if(locked)return;const selection=targets();if(!selection.length)return;
@@ -224,8 +244,8 @@
     render();restoreTextSelection(selection);syncToolbar();changed();
   }
   page.addEventListener('pointerup',()=>{captureTextSelection();syncToolbar();});
-  document.addEventListener('selectionchange',()=>{if(bytes&&!composing&&page.contains(getSelection().anchorNode)){captureTextSelection();syncTextToolbar();}});
-  el('wordToolbar').addEventListener('mousedown',()=>captureTextSelection());
+  document.addEventListener('selectionchange',()=>{if(bytes&&!composing){captureTextSelection();syncToolbar();}});
+  el('wordToolbar').addEventListener('mousedown',()=>{captureTextSelection();syncToolbar();});
   el('wordFont').onchange=event=>{if(event.target.value)formatText({font:event.target.value});};
   el('wordSize').onchange=event=>{const size=Number(event.target.value);if(size<6||size>96||!Number.isInteger(size*2)){setStatus('字号须为 6–96 磅，支持半磅','error');syncTextToolbar();return;}formatText({size});};
   function applyColor(value) {
@@ -252,9 +272,11 @@
     const next=blocks.slice(index).find(b=>b.editable)||blocks.find(b=>b.editable);render(next.id,0);changed();
   };
   function restore(snapshotText) {
-    textSelection=[];
+    const previousSelection=textSelection;textSelection=[];
     blocks=JSON.parse(snapshotText).map(b=>({...originals.get(b.id),...b,editable:originals.get(b.id)?.editable??true}));
-    const focus=blocks.find(b=>b.id===selectedId&&b.editable)||blocks.find(b=>b.editable);render(focus?.id,focus?.text.length||0);changed();
+    if(currentStyled()?.styleEditable&&previousSelection.length){render();restoreTextSelection(previousSelection);syncToolbar();}
+    else {const focus=blocks.find(b=>b.id===selectedId&&b.editable)||blocks.find(b=>b.editable);render(focus?.id,focus?.text.length||0);}
+    changed();
   }
   function undo() { if(locked||!undoStack.length)return;redoStack.push(snapshot());restore(undoStack.pop()); }
   function redo() { if(locked||!redoStack.length)return;undoStack.push(snapshot());restore(redoStack.pop()); }
@@ -268,11 +290,12 @@
   el('wordToolbar').addEventListener('mousedown',event=>{if(event.target.closest('button'))event.preventDefault();});
   function load(data) {
     textSelection=[];bytes=new Uint8Array(data.bytes);blocks=data.model.blocks;
-    for(const b of blocks)if(b.editable)b.runs=(b.runs?.length?b.runs:[{text:b.text}]).map((r,index)=>({...r,origin:b.runs?.length?{id:b.id,index}:undefined,overrides:{}}));
+    for(const b of blocks)if(canStyle(b))b.runs=(b.runs?.length?b.runs:[{text:b.text}]).map((r,index)=>({...r,origin:b.runs?.length?{id:b.id,index}:undefined,overrides:{}}));
     originals=new Map(blocks.map(b=>[b.id,JSON.parse(JSON.stringify(b))]));
     if(!blocks.length)blocks.push(newBlock());
     saved=snapshot();undoStack=[];redoStack=[];selectedId=null;
-    el('wordNotice').textContent=data.model.protectedCount?'选中文字设置样式；未选中时应用到当前段落。图片、表格及复杂段落保留原内容。':'选中文字设置样式；未选中文字时应用到当前段落 · Ctrl+S 保存原文件';
+    defaultNotice=data.model.protectedCount?'选中文字可设置样式；复杂段落支持文字样式，保留原有结构。表格和图片保留原内容。':'选中文字设置样式；未选中文字时应用到当前段落 · Ctrl+S 保存原文件';
+    el('wordNotice').textContent=defaultNotice;
     render();changed();
   }
   async function save() {
