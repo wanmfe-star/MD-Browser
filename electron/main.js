@@ -44,6 +44,15 @@ if (process.env.MD_BROWSER_SMOKE) {
 let mainWindow = null;
 const browserPasswords=require('./browser-passwords').install({ipcMain,dialog,app,safeStorage,getWindow:()=>mainWindow});
 const credentials = require('./credentials').createCredentialStore(app.getPath('userData'), safeStorage);
+const notesDirectory = path.join(app.getPath('userData'), '便签');
+const quick = require('./quick-note');
+const sticky = require('./sticky-windows').installNotes(() => mainWindow, notesDirectory, () => showMain(true));
+let noteConnectionVersion = 0;
+async function setNoteConnection(config, version) {
+  if (!config) return;
+  const target = await webdav.noteBackupTarget(config);
+  if (version === noteConnectionVersion) sticky.store.connect(target);
+}
 
 const aiService=require('./ai-service').createService({directory:app.getPath('userData'),encryption:safeStorage,emit:event=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('ai:event',event);}});
 app.on('before-quit',()=>aiService.close());
@@ -189,13 +198,40 @@ function createWindow() {
   });
 }
 
+function showMain(wall = false) {
+  if (!mainWindow) createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  if (wall) {
+    const contents = mainWindow.webContents;
+    const openWall = () => contents.send('notes:show-wall');
+    if (contents.isLoadingMainFrame()) contents.once('did-finish-load', openWall);
+    else openWall();
+  }
+}
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
+app.on('second-instance', (_event, argv) => {
+  app.whenReady().then(() => {
+    if (argv.includes(quick.quickFlag)) sticky.restoreQuick();
+    else showMain();
+  });
+});
 app.whenReady().then(() => {
+  if (!primaryInstance) return;
+  if (!process.env.MD_BROWSER_SMOKE) {
+    const version = noteConnectionVersion;
+    credentials.load().then(config => setNoteConnection(config, version)).catch(() => {});
+  }
   protocol.handle('mdmedia', request => media.handle(request));
   if (process.platform === 'darwin') app.dock.setIcon(path.join(__dirname, '../assets/icon.png'));
-  createWindow();
+  const quickOnly = process.argv.includes(quick.quickFlag);
+  if (!quickOnly) createWindow();
+  if (quickOnly || sticky.quickId()) sticky.restoreQuick();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    showMain();
   });
 });
 
@@ -217,9 +253,33 @@ function handle(channel, fn) {
 }
 
 handle('ai:request',(action,payload)=>aiService.dispatch(action,payload));
+handle('notes:list', () => sticky.store.list());
+handle('notes:details', id => sticky.openDetails(id));
+handle('notes:delete', async id => {
+  const note = sticky.store.get(id);
+  if (!note) throw new Error('找不到便签');
+  const { response } = await dialog.showMessageBox(mainWindow, { type:'question', title:'删除便签',
+    message:note.title ? '删除「' + note.title.slice(0,60) + '」？' : '删除这条便签？', detail:'Markdown 文件将移入本地便签文件夹的「回收站」。已有的 WebDAV 备份会保留。',
+    buttons:['取消','删除便签'], defaultId:0, cancelId:0 });
+  if (response === 1) await sticky.remove(id);
+});
+handle('notes:open', async id => {
+  await sticky.open(id);
+});
+handle('notes:quick', async () => {
+  await sticky.openQuick();
+  if (!sticky.pinned()) mainWindow?.minimize();
+});
+handle('notes:login', enabled => typeof enabled === 'boolean' ? quick.setLogin(enabled) : quick.loginEnabled());
+handle('notes:folder', async () => {
+  require('node:fs').mkdirSync(notesDirectory, { recursive: true });
+  const error = await shell.openPath(notesDirectory);
+  if (error) throw new Error(error);
+});
 
 handle('webdav:connect', async (cfg) => {
   const root = await webdav.connect(cfg);
+  await setNoteConnection(cfg, ++noteConnectionVersion);
   media.clear();
   let credentialWarning = null;
   // Smoke runs use disposable credentials and must not open the user's Keychain.
@@ -232,6 +292,8 @@ handle('app:load-connection', () => credentials.load());
 handle('app:clear-connection', () => credentials.clear());
 
 handle('webdav:disconnect', () => {
+  noteConnectionVersion++;
+  sticky.store.disconnect();
   media.clear();
   webdav.disconnect();
   return true;

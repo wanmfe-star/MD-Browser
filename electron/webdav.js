@@ -16,16 +16,35 @@ function getClient() {
   return client;
 }
 
-async function connect({ url, username, password }) {
+async function configuredClient({ url, username, password }) {
   const { createClient, AuthType } = await getLib();
   // MOVE/COPY concatenate remoteURL directly into the Destination header.
   // Canonicalize the base too: fetch encodes request URLs, but never header values.
   const base = new URL(url.replace(/\/+$/, '') + '/').href;
-  const candidate = createClient(base, {
+  return createClient(base, {
     username: username || '',
     password: password || '',
     authType: AuthType.Password,
   });
+}
+
+async function noteBackupTarget(cfg) {
+  const destination = await configuredClient(cfg);
+  const dir = '/MD Browser 便签备份';
+  const key = JSON.stringify([new URL(cfg.url).href.replace(/\/+$/, ''), cfg.username || '']);
+  let ready = false;
+  return { key, async upload(id, text) {
+    try {
+      const options = { timeout: 15000 };
+      if (!ready && !await destination.exists(dir, options)) await destination.createDirectory(dir, options);
+      ready = true;
+      if (!await destination.putFileContents(dir + '/' + id + '.md', text, { ...options, overwrite: true })) throw new Error('备份未完成');
+    } catch (error) { ready = false; throw error; }
+  } };
+}
+
+async function connect(cfg) {
+  const candidate = await configuredClient(cfg);
   const root = await candidate.getDirectoryContents('/', { deep: false, details: true });
   client = candidate;
   return root.data.filter(isVisible).map(normalizeItem);
@@ -162,4 +181,4 @@ async function exists(path) {
   return getClient().exists(path);
 }
 
-module.exports = { connect, disconnect, list, read, readBinary, mediaReader, fileDownloadReader, createMedia, writePDF, writeDocx, write, create, mkdir, remove, rename, copy, exists };
+module.exports = { noteBackupTarget, connect, disconnect, list, read, readBinary, mediaReader, fileDownloadReader, createMedia, writePDF, writeDocx, write, create, mkdir, remove, rename, copy, exists };

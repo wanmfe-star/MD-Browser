@@ -4,6 +4,15 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('mdAPI', {
+  notesList: () => ipcRenderer.invoke('notes:list'),
+  notesDetails: id => ipcRenderer.invoke('notes:details', id),
+  deleteNote: id => ipcRenderer.invoke('notes:delete', id),
+  openQuick: () => ipcRenderer.invoke('notes:quick'),
+  quickLogin: enabled => ipcRenderer.invoke('notes:login', enabled),
+  onShowWall: fn => { ipcRenderer.on('notes:show-wall', () => fn()); },
+  notesOpen: id => ipcRenderer.invoke('notes:open', id),
+  notesFolder: () => ipcRenderer.invoke('notes:folder'),
+  onNotesChanged: fn => { ipcRenderer.on('notes:changed', () => fn()); },
   ai: (action,payload) => ipcRenderer.invoke('ai:request',action,payload),
   onAI: callback => { const listener=(_event,value)=>callback(value);ipcRenderer.on('ai:event',listener);return ()=>ipcRenderer.removeListener('ai:event',listener); },
   browserPassword: (action, id) => ipcRenderer.invoke('browser:password', action, id),

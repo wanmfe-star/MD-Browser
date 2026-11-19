@@ -1,9 +1,11 @@
 {
   "name": "md-browser",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "description": "连接 WebDAV 的文档编辑与多媒体浏览客户端",
   "main": "electron/main.js",
   "scripts": {
+    "test:sticky-notes": "electron test/test-sticky-notes.cjs",
+    "test:quick-note": "electron test/test-quick-note.cjs",
     "start": "electron .",
     "dev": "electron .",
     "test:webdav": "node test/test-webdav.mjs",

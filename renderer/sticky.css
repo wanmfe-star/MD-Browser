@@ -1,0 +1,56 @@
+#noteNavigation { display:grid; grid-template-columns:1fr 1fr; gap:3px; margin:8px 16px 0; flex-shrink:0 }
+#noteNavigation button { text-align:left; border:0; background:transparent; border-radius:6px; padding:9px 13px; color:var(--text) }
+#noteNavigation button[aria-pressed=true] { background:var(--soft); color:var(--accent); font-weight:600 }
+.notes-active #workspaceShell, .notes-active .sidebar > :not(.brand,#noteNavigation,.ai-entry,.sidebar-footer) { display:none }
+.notes-active #noteNavigation { margin-top:auto }
+#noteWall { flex:1; min-width:0; padding:28px clamp(20px,3vw,46px); overflow:auto }
+#noteWall header, .sticky-editor header { display:flex; align-items:center; justify-content:space-between; gap:15px }
+#noteWall h1 { margin:0; font-size:26px; letter-spacing:.03em }
+#noteQuery { width:100%; max-width:780px; margin:20px 0 14px; border:1px solid var(--border); border-radius:8px; padding:10px 14px }
+#noteFilters, .sticky-tags { display:flex; gap:7px; flex-wrap:wrap }
+#noteFilters button, .sticky-tags span, .sticky-editor button { border:1px solid #dce2d8; border-radius:18px; padding:5px 13px; background:transparent; color:inherit }
+#noteFilters [aria-pressed=true], .sticky-editor [aria-pressed=true] { background:#347552; color:white }
+#noteCards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px }
+.sticky-card { display:flex; flex-direction:column; align-items:flex-start; text-align:left; min-width:0; min-height:158px; padding:18px; color:var(--text); border:1px solid #e6e9de; border-radius:10px; background:#fbf8ef; box-shadow:0 2px 5px #25332d08 }
+.sticky-card:nth-child(3n+2) { background:#e8f1e4 }
+.sticky-card:nth-child(3n) { background:#fff1c5 }
+.sticky-card:hover { border-color:#88a18c }
+.sticky-card strong,.sticky-card p { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere }
+.sticky-card strong { font-size:18px; -webkit-line-clamp:1 }
+.sticky-card p { line-height:1.6; -webkit-line-clamp:3; white-space:pre-line; margin:8px 0 15px }
+.sticky-tags { margin-top:auto }
+.sticky-tags span { padding:2px 8px; font-size:12px; background:#ffffff65; overflow-wrap:anywhere }
+#noteMessage { color:#697665; margin:16px 0 }
+#noteWall footer { margin-top:20px; display:flex; flex-wrap:wrap; align-items:center; gap:14px }
+#noteContext { position:fixed; z-index:100; padding:4px; background:var(--bg); border:1px solid var(--border); border-radius:7px; box-shadow:0 3px 12px #25332d20 }
+#noteContext button { background:transparent; color:var(--danger); border:0; padding:7px 16px; border-radius:4px }
+#noteContext button:hover { background:#faf0ec }
+@media(max-width:1080px){ #noteCards { grid-template-columns:repeat(2,minmax(0,1fr)) } }
+.sticky-editor { box-sizing:border-box; margin:0; height:100vh; display:flex; flex-direction:column; gap:12px; padding:18px; color:#293328; font:14px "Microsoft YaHei",sans-serif; background:linear-gradient(145deg,#fffbed,#fff2c8) }
+.quick-editor { position:relative; padding-top:14px }
+.quick-handle { position:absolute; top:0; left:0; right:0; height:14px; -webkit-app-region:drag; user-select:none }
+.quick-handle[hidden] { display:none }
+.position-locked .quick-handle { -webkit-app-region:no-drag }
+.sticky-editor input,.sticky-editor textarea,.sticky-editor button { color:inherit; font:inherit }
+.sticky-editor #title,.sticky-editor #tags,.sticky-editor textarea { min-width:0; flex:1; padding:6px; background:transparent; border:1px solid transparent; border-radius:5px }
+.sticky-editor #title { font-size:18px; font-weight:600 }
+.sticky-editor #title::placeholder { color:#a3a18e; font-weight:400 }
+.sticky-actions { display:flex; gap:5px }
+.sticky-editor .sticky-icon { display:grid; place-items:center; width:25px; height:25px; padding:0; border-radius:5px; cursor:pointer; background:#fff9; color:#445743 }
+.sticky-editor .sticky-icon:hover { border-color:#759173 }
+.sticky-editor :is(#pin,#lock) { background:transparent; border-color:transparent; color:#929383 }
+.sticky-editor .sticky-icon[aria-pressed=true] { background:#e5eadc; border-color:#d6dfce; color:#63785c }
+.sticky-editor :is(#pin,#lock):hover { background:#e8ecdf; border-color:#c5cfbc; color:#425b3d }
+.sticky-icon svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linejoin:round; stroke-linecap:round }
+.sticky-icon[aria-pressed=true] .shackle-open,.sticky-icon[aria-pressed=false] .shackle-closed,.sticky-editor .sticky-icon[hidden] { display:none }
+.sticky-editor textarea { resize:none; line-height:1.7; font-size:16px }
+.sticky-editor :focus-visible { outline:2px solid #749777 }
+.sticky-editor .tag-field { display:flex; align-items:center; gap:8px; color:#59634d }
+.sticky-editor footer { border-top:1px solid #ded9c9; padding-top:10px; display:flex; justify-content:space-between; gap:8px; color:#546548; font-size:12px }
+.note-detail { margin:0; padding:24px; background:#fffbed; color:#293328; font:15px/1.8 "Microsoft YaHei",sans-serif; overflow-wrap:anywhere }
+.note-detail header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px }
+.note-detail h1 { font-size:22px; margin:0 }
+.note-detail button { margin-left:auto; flex-shrink:0; padding:6px 12px; border:1px solid #d6dfce; border-radius:6px; background:#e5eadc; color:#425b3d; cursor:pointer }
+#detailBody { white-space:pre-wrap; margin-top:20px }
+#detailTags { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px }
+#detailTags span { padding:1px 9px; border-radius:12px; background:#e5eadc; font-size:12px }
